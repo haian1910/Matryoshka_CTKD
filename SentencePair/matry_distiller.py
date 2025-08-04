@@ -20,8 +20,8 @@ from utils import log_rank
 from huggingface_hub import login
 import torch.distributed as dist
 import os
-#token = os.getenv("HF_TOKEN")
-#login(token=token)
+token = os.getenv("HF_TOKEN")
+login(token=token)
 
 class MRL_Linear_Layer(nn.Module):
     def __init__(self, nesting_list: List, num_classes=1000, efficient=False, **kwargs):
