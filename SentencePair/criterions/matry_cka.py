@@ -106,7 +106,7 @@ class MatryoshkaHiddenStateProcessor:
             cka_similarity = cka_loss_fn(matryoshka_student, teacher_hidden)
             
             # Loss is 1 - sqrt(CKA) as per your idea
-            cka_loss = 1.0 - torch.sqrt(cka_similarity)
+            cka_loss = 1.0 - (cka_similarity)
             
             # Weight the loss
             weighted_loss = weight * cka_loss
