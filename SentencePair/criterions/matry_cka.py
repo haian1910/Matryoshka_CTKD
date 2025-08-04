@@ -130,7 +130,7 @@ class MATRY_CKA(Matry_CrossEntropyLoss):
         
         # Matryoshka dimensions for hidden state processing
         # These should be smaller than the student model's hidden dimension
-        self.matryoshka_hidden_dims = getattr(args, 'matryoshka_hidden_dims', [128, 256, 384, 512, 768])
+        self.matryoshka_hidden_dims = getattr(args, 'matryoshka_hidden_dims', [64, 128, 256, 512, 768])
         self.matryoshka_hidden_weights = getattr(args, 'matryoshka_hidden_weights', None)
         self.n_dims_per_step = getattr(args, 'n_dims_per_step', -1)
         
