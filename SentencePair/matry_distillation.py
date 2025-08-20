@@ -204,7 +204,7 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
                 
             #     # Save MRL specific config
             #     mrl_config = {
-            #         'nesting_list': getattr(args, 'mrl_nesting_list', [64, 128, 256, 512, 768]),
+            #         'nesting_list': getattr(args, 'mrl_nesting_list', [128, 256, 512, 768]),
             #         'mrl_efficient': getattr(args, 'mrl_efficient', False),
             #         'mrl_relative_importance': getattr(args, 'mrl_relative_importance', None)
             #     }
@@ -255,7 +255,7 @@ def evaluate_mrl(args, tokenizer, student_model, dataset, split, device):
     student_model.eval()
     
     # Get nesting list from args or model
-    nesting_list = getattr(args, 'mrl_nesting_list', [64, 128, 256, 512, 768])
+    nesting_list = getattr(args, 'mrl_nesting_list', [128, 256, 512, 768])
     mrl_efficient = getattr(args, 'mrl_efficient', False)
     
     # Check if model has MRL capability
