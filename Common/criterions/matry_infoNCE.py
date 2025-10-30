@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 from typing import List
+from .info_NCE import InfoNCELoss
 
 class Matryoshka_InfoNCE_Loss(nn.Module):
     def __init__(self, temperature: float = 0.05, relative_importance: List[float] = None):
