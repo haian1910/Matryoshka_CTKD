@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .matry_infoNCE import Matryoshka_InfoNCE_Loss
+from .matry_infoNCE import Matry_InfoNCELoss
 import math
 import random
 from typing import List, Optional
@@ -57,6 +57,7 @@ class CKALoss(nn.Module):
         den2 = torch.norm(TH.t().matmul(TH), 'fro') + self.eps
         
         return num / torch.sqrt(den1 * den2)
+
 
 class MatryoshkaHiddenStateProcessor:
     """
@@ -147,7 +148,8 @@ class MatryoshkaHiddenStateProcessor:
         
         return total_loss
 
-class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
+
+class MATRY_CTKD(Matry_InfoNCELoss):
     def __init__(self, args) -> None:
         super().__init__(args)
         self.kd_rate = args.kd_rate  # Knowledge distillation rate
@@ -187,7 +189,7 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
         for dim in self.nesting_list:
             self.projectors[f'proj_{dim}'] = OrthogonalProjection(
                 in_dim=dim, 
-                out_dim=self.teacher_hidden_size
+                out_dim=2048
             )
     
     def to(self, device, dtype=None):
@@ -207,38 +209,49 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
         return result
         
     def forward(self, distiller, input_data, output_data, logging_output, batch_denom):
-       
-        self.distiller = distiller
-        model = distiller.student_model
+        """
+        Forward pass for Matryoshka CTKD loss.
         
-        # Matryoshka mode: get embeddings at multiple granularities
-        query_embeddings_dict = distiller.get_matryoshka_embeddings(
-            model,
+        Args:
+            distiller: Distiller object containing student and teacher models
+            input_data: Dict with query_input_ids, query_attention_mask, 
+                       positive_input_ids, positive_attention_mask
+            output_data: Not used (no specific task yet)
+            logging_output: Dict for logging metrics
+            batch_denom: Denominator for loss normalization
+        """
+        self.distiller = distiller
+        
+        # Get Matryoshka embeddings for query (truncate + mean pool)
+        query_embeddings_dict = self.get_matryoshka_embeddings(
+            distiller.student_model,
             input_data['query_input_ids'],
             input_data['query_attention_mask']
         )
         
-        positive_embeddings_dict = distiller.get_matryoshka_embeddings(
-            model,
+        # Get Matryoshka embeddings for positive (truncate + mean pool)
+        positive_embeddings_dict = self.get_matryoshka_embeddings(
+            distiller.student_model,
             input_data['positive_input_ids'],
             input_data['positive_attention_mask']
         )
 
+        # Compute Matryoshka InfoNCE loss (task loss)
         loss_task, correct_list = self.compute_matryoshka_infonce_loss(
             query_embeddings_dict, 
             positive_embeddings_dict
         )
         
-        
-        # Compute Matryoshka CTKD loss
+        # Compute Matryoshka CTKD loss (distillation loss)
         loss_kd = self.compute_matry_ctkd(
-            query_embeddings_dict, 
-            positive_embeddings_dict
+            distiller,
+            input_data
         )
         
         # Use the largest dimension for logging correct predictions
         correct = correct_list[-1] if correct_list else torch.tensor(0.0)
 
+        # Combine task and distillation losses
         final_loss = (1.0 - self.kd_rate) * loss_task + self.kd_rate * loss_kd
         
         # Update logging output
@@ -247,39 +260,70 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
             batch_denom,
             {
                 "loss": final_loss,
+                "loss_task": loss_task,
+                "loss_kd": loss_kd,
                 "correct": correct
             }
         )
         return final_loss, logging_output
 
+    def get_matryoshka_embeddings(self, model, input_ids, attention_mask):
+        """
+        Get Matryoshka embeddings by truncating hidden dimensions.
+        Uses mean pooling to get sentence embeddings.
+        
+        Args:
+            model: Student model
+            input_ids: [batch_size, seq_len]
+            attention_mask: [batch_size, seq_len]
+        
+        Returns:
+            Dict mapping dimension -> embeddings [batch_size, dim]
+        """
+        # Forward pass to get hidden states
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
+        last_hidden_state = outputs.last_hidden_state  # [batch_size, seq_len, hidden_dim]
+        
+        # Mean pooling
+        embeddings = self.distiller.mean_pooling(last_hidden_state, attention_mask)  # [batch_size, hidden_dim]
+        
+        # Create Matryoshka embeddings by truncating dimensions
+        matryoshka_embeddings = {}
+        for dim in self.nesting_list:
+            if dim <= embeddings.shape[-1]:
+                # Truncate to dimension
+                truncated = embeddings[:, :dim]
+                # L2 normalize
+                normalized = torch.nn.functional.normalize(truncated, p=2, dim=-1)
+                matryoshka_embeddings[dim] = normalized
+        
+        return matryoshka_embeddings
     
-       
-    def get_embedding_layer(self, model, model_type):
-        """Extract embedding layer from different model architectures"""
-        # Handle wrapped models (like BertWithMRLWrapper)
-        if hasattr(model, 'bert'):
-            base_model = model.bert
-        elif hasattr(model, 'model'):
-            base_model = model.model
-        else:
-            base_model = model
+    def get_teacher_embeddings(self, model, input_ids, attention_mask):
+        """
+        Get teacher embeddings using mean pooling.
+        
+        Args:
+            model: Teacher model
+            input_ids: [batch_size, seq_len]
+            attention_mask: [batch_size, seq_len]
+        
+        Returns:
+            embeddings: [batch_size, teacher_hidden_dim]
+        """
+        with torch.no_grad():
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
+            last_hidden_state = outputs.last_hidden_state  # [batch_size, seq_len, hidden_dim]
             
-        # Try different embedding layer access patterns
-        if hasattr(base_model, "get_input_embeddings"):
-            return base_model.get_input_embeddings()
-        elif hasattr(base_model, "embeddings") and hasattr(base_model.embeddings, "word_embeddings"):
-            return base_model.embeddings.word_embeddings
-        elif hasattr(base_model, "embed_tokens"):
-            return base_model.embed_tokens
-        elif hasattr(base_model, "transformer") and hasattr(base_model.transformer, "wte"):
-            return base_model.transformer.wte
-        elif hasattr(base_model, "wte"):
-            return base_model.wte
-        else:
-            raise NotImplementedError(f"Unsupported {model_type} model architecture for embedding extraction")
+            # Mean pooling
+            embeddings = self.distiller.mean_pooling(last_hidden_state, attention_mask)
+            
+            # L2 normalize
+            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=-1)
+        
+        return embeddings
 
-
-    def compute_matry_ctkd(self, query_embeddings, positive_embeddings):
+    def compute_matry_ctkd(self, distiller, input_data):
         """
         Compute Matryoshka CTKD loss using orthogonal projections and InfoNCE.
         
@@ -288,34 +332,43 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
         
         Where:
         - B is batch size
-        - K is the set of student layers (in this case we use query/positive pairs)
+        - K is the set of student layers (here we use query/positive pairs)
         - S is the number of Matryoshka dimensions
         - w_i is the weight for dimension i
         - l_NCE^{(k,i,b)} is the InfoNCE loss for layer k, width i, sample b
         
         Args:
-            query_embeddings: Dict mapping dimension -> query embeddings [batch_size, dim]
-            positive_embeddings: Dict mapping dimension -> positive embeddings [batch_size, dim]
+            distiller: Distiller object
+            input_data: Dict with query and positive input_ids and attention_masks
         
         Returns:
             Total Matryoshka CTKD loss
         """
-        # Get teacher embeddings (mean pooled last layer)
-        teacher_query = self.distiller.get_teacher_embeddings(
-            self.distiller.teacher_model,
-            self.distiller.teacher_input_ids_query,
-            self.distiller.teacher_attention_mask_query
+        # Get teacher embeddings (mean pooled)
+        teacher_query = self.get_teacher_embeddings(
+            distiller.teacher_model,
+            input_data['query_input_ids'],
+            input_data['query_attention_mask']
         )  # [batch_size, teacher_dim]
         
-        teacher_positive = self.distiller.get_teacher_embeddings(
-            self.distiller.teacher_model,
-            self.distiller.teacher_input_ids_positive,
-            self.distiller.teacher_attention_mask_positive
+        teacher_positive = self.get_teacher_embeddings(
+            distiller.teacher_model,
+            input_data['positive_input_ids'],
+            input_data['positive_attention_mask']
         )  # [batch_size, teacher_dim]
         
-        # Normalize teacher embeddings
-        teacher_query = torch.nn.functional.normalize(teacher_query, p=2, dim=-1)
-        teacher_positive = torch.nn.functional.normalize(teacher_positive, p=2, dim=-1)
+        # Get student Matryoshka embeddings
+        query_embeddings_dict = self.get_matryoshka_embeddings(
+            distiller.student_model,
+            input_data['query_input_ids'],
+            input_data['query_attention_mask']
+        )
+        
+        positive_embeddings_dict = self.get_matryoshka_embeddings(
+            distiller.student_model,
+            input_data['positive_input_ids'],
+            input_data['positive_attention_mask']
+        )
         
         batch_size = teacher_query.size(0)
         total_loss = 0.0
@@ -333,20 +386,12 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
             weight = self.relative_importance[idx]
             
             # Skip if dimension not available
-            if dim not in query_embeddings or dim not in positive_embeddings:
+            if dim not in query_embeddings_dict or dim not in positive_embeddings_dict:
                 continue
             
-            # Get student embeddings at this dimension
-            student_query = query_embeddings[dim]  # [batch_size, dim]
-            student_positive = positive_embeddings[dim]  # [batch_size, dim]
-            
-            # Truncate to ensure correct dimension (in case of padding)
-            student_query = student_query[:, :dim]
-            student_positive = student_positive[:, :dim]
-            
-            # Normalize student embeddings (important for InfoNCE)
-            student_query = torch.nn.functional.normalize(student_query, p=2, dim=-1)
-            student_positive = torch.nn.functional.normalize(student_positive, p=2, dim=-1)
+            # Get student embeddings at this dimension (already normalized)
+            student_query = query_embeddings_dict[dim]  # [batch_size, dim]
+            student_positive = positive_embeddings_dict[dim]  # [batch_size, dim]
             
             # Apply orthogonal projection: P_i * s_k^(i)(x) -> R^D
             projector = self.projectors[f'proj_{dim}']
@@ -360,10 +405,6 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
             # Compute InfoNCE loss for query-positive pairs
             # For each sample b, we compute the InfoNCE loss
             
-            # Calculate similarity scores between projected student and teacher
-            # For query: <p_hat_query_b, t_positive_b> (positive pair)
-            # Negatives: <p_hat_query_b, t_positive_k'> for k' != b
-            
             # Similarity matrix: [batch_size, batch_size]
             # scores[b, k'] = <projected_query[b], teacher_positive[k']>
             similarity_matrix = torch.matmul(projected_query, teacher_positive.t())  # [B, B]
@@ -375,7 +416,6 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
             # Compute InfoNCE loss
             # For each sample b, the positive is at diagonal position [b, b]
             # Loss = -log( exp(<p_hat_b, t_b>) / sum_{k'=1}^B exp(<p_hat_b, t_k'>) )
-            
             labels = torch.arange(batch_size, device=similarity_matrix.device)
             loss_query = torch.nn.functional.cross_entropy(similarity_matrix, labels)
             
@@ -390,14 +430,11 @@ class MATRY_CTKD(Matryoshka_InfoNCE_Loss):
             weighted_loss = weight * infonce_loss
             total_loss += weighted_loss
         
-        # Average over all dimensions (already weighted)
-        # The formula in the paper has 1/B factor, but cross_entropy already averages over batch
-        # So we just need to normalize by the number of dimensions processed
+        # Normalize by number of dimensions processed
         if len(dim_indices) > 0:
             total_loss = total_loss / len(dim_indices)
         
         return total_loss
-
 
     def record_logging_output(self, logging_output, batch_denom, content):
         """
