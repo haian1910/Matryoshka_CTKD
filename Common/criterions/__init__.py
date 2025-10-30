@@ -13,6 +13,7 @@ from .rank_cka import RANK_CKA
 from .min_cka import MIN_CKA
 from .info_NCE import InfoNCELoss
 from .matry_infoNCE import Matry_InfoNCELoss
+from .matry_ctkd import MATRY_CTKD
 
 criterion_list = {
     "cross_entropy": CrossEntropyLoss,
@@ -30,7 +31,8 @@ criterion_list = {
     "rank_cka": RANK_CKA,
     "min_cka": MIN_CKA,
     "info_nce": InfoNCELoss,
-    "matry_nce": Matry_InfoNCELoss
+    "matry_nce": Matry_InfoNCELoss,
+    "matry_ctkd": MATRY_CTKD
 }
 
 def build_criterion(args):
