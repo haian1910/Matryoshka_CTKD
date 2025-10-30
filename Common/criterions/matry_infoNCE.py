@@ -49,7 +49,7 @@ class Matryoshka_InfoNCE_Loss(nn.Module):
         
         return total_loss, correct_list
 
-class InfoNCELoss(nn.Module):
+class Matry_InfoNCELoss(nn.Module):
     def __init__(self, args) -> None:
         super(InfoNCELoss, self).__init__()
         self.temperature = args.contrastive_temperature if hasattr(args, 'contrastive_temperature') else 0.05
