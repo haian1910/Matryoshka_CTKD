@@ -12,6 +12,7 @@ from .multi_level_ot import MULTI_LEVEL_OT
 from .rank_cka import RANK_CKA
 from .min_cka import MIN_CKA
 from .info_NCE import InfoNCELoss
+from .matry_infoNCE import Matry_InfoNCELoss
 
 criterion_list = {
     "cross_entropy": CrossEntropyLoss,
@@ -28,7 +29,8 @@ criterion_list = {
     "multi_level_ot": MULTI_LEVEL_OT,
     "rank_cka": RANK_CKA,
     "min_cka": MIN_CKA,
-    "info_nce": InfoNCELoss
+    "info_nce": InfoNCELoss,
+    "matry_nce": Matry_InfoNCELoss
 }
 
 def build_criterion(args):
