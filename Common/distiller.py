@@ -53,20 +53,20 @@ class Distiller(nn.Module):
         """Get embeddings from model based on pooling method"""
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         
-        if self.args.pooling_method == "cls":
-            # Use [CLS] token embedding (first token)
-            embeddings = outputs.last_hidden_state[:, 0, :]
-        elif self.args.pooling_method == "mean":
-            # Use mean pooling
-            embeddings = self.mean_pooling(outputs.last_hidden_state, attention_mask)
-        elif self.args.pooling_method == "last":
-            # Use last token embedding
-            sequence_lengths = attention_mask.sum(dim=1) - 1
-            batch_size = input_ids.shape[0]
-            embeddings = outputs.last_hidden_state[torch.arange(batch_size), sequence_lengths]
-        else:
-            raise ValueError(f"Unknown pooling method: {self.args.pooling_method}")
-        
+        # if self.args.pooling_method == "cls":
+        #     # Use [CLS] token embedding (first token)
+        #     embeddings = outputs.last_hidden_state[:, 0, :]
+        # elif self.args.pooling_method == "mean":
+        #     # Use mean pooling
+        #     embeddings = self.mean_pooling(outputs.last_hidden_state, attention_mask)
+        # elif self.args.pooling_method == "last":
+        #     # Use last token embedding
+        #     sequence_lengths = attention_mask.sum(dim=1) - 1
+        #     batch_size = input_ids.shape[0]
+        #     embeddings = outputs.last_hidden_state[torch.arange(batch_size), sequence_lengths]
+        # else:
+        #     raise ValueError(f"Unknown pooling method: {self.args.pooling_method}")
+        embeddings = self.mean_pooling(outputs.last_hidden_state, attention_mask)
         return embeddings
     
     def load_student_model(self):
