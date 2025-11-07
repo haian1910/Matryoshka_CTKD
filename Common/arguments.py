@@ -30,7 +30,7 @@ def add_model_args(parser: argparse.ArgumentParser):
     group.add_argument("--teacher-model-type", type=str, default=None)
     group.add_argument("--n-gpu", type=int, default=1)
     group.add_argument("--n-nodes", type=int, default=1)
-    group.add_argument("--teacher-model-path", type=str)
+    # group.add_argument("--teacher-model-path", type=str)
     group.add_argument("--teacher-model-fp16", action="store_true")
     group.add_argument("--model-parallel", action="store_true")
     group.add_argument("--model-parallel-size", type=int, default=None)
@@ -76,6 +76,8 @@ def add_runtime_args(parser: argparse.ArgumentParser):
 def add_data_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group('data', 'data configurations')
     group.add_argument("--data-dir", type=str, default=None)
+    group.add_argument("--sts-data-dir", type=str, default=None, help="Path to STS dataset for evaluation")
+    group.add_argument("--nli-data-dir", type=str, default=None, help="Path to STS dataset for evaluation")
     group.add_argument("--processed-data-dir", type=str, default=None)
     group.add_argument("--force-process", action="store_true")
     group.add_argument("--force-process-demo", action="store_true")

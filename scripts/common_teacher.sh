@@ -15,11 +15,11 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
                   --master_port $MASTER_PORT"
 
 # model
-BASE_PATH=/content/Matryoshka_CTKD
+BASE_PATH=/workspace/Matryoshka_CTKD
 CKPT_NAME="LLM2Vec"
 CKPT_PATH="${BASE_PATH}/model_hub/${CKPT_NAME}"
 # data
-DATA_DIR="/content/drive/MyDrive/2MMath/common_data_30"
+DATA_DIR="/workspace/Matryoshka_CTKD/common_data"
 NUM_LABELS=2
 # task
 TASK="sft"
