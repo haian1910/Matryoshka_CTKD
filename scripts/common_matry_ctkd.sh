@@ -61,9 +61,10 @@ OPTS+=" --n-gpu ${GPUS_PER_NODE}"
 OPTS+=" --teacher-model-fp16"
 OPTS+=" --gradient-checkpointing"
 # data
-OPTS+=" --sts-data-dir /workspace/Matryoshka_CTKD/common_data_test"
+# Multi-dataset fine-tuning and evaluation for STS and CLF tasks
+OPTS+=" --sts-data-dirs /workspace/Matryoshka_CTKD/common_data_test:/workspace/Matryoshka_CTKD/data/stsbenchmark_30"
+OPTS+=" --clf-data-dirs /workspace/Matryoshka_CTKD/data/ag_news_30:/workspace/Matryoshka_CTKD/data/patent_30"
 OPTS+=" --nli-data-dir /workspace/Matryoshka_CTKD/data/scitail_30"
-OPTS+=" --clf-data-dir /workspace/Matryoshka_CTKD/data/patent_30"
 OPTS+=" --data-dir ${DATA_DIR}"
 OPTS+=" --num-workers 0"
 OPTS+=" --dev-num 1000"

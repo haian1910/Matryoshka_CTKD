@@ -77,8 +77,10 @@ def add_data_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group('data', 'data configurations')
     group.add_argument("--data-dir", type=str, default=None)
     group.add_argument("--sts-data-dir", type=str, default=None, help="Path to STS dataset for evaluation")
+    group.add_argument("--sts-data-dirs", type=str, default=None, help="Colon-separated list of STS dataset paths for multi-dataset evaluation")
     group.add_argument("--nli-data-dir", type=str, default=None, help="Path to NLI dataset for evaluation")
     group.add_argument("--clf-data-dir", type=str, default=None, help="Path to CLF (classification) dataset for evaluation")
+    group.add_argument("--clf-data-dirs", type=str, default=None, help="Colon-separated list of CLF dataset paths for multi-dataset evaluation")
     group.add_argument("--processed-data-dir", type=str, default=None)
     group.add_argument("--force-process", action="store_true")
     group.add_argument("--force-process-demo", action="store_true")
@@ -209,5 +211,16 @@ def get_args():
     args.local_rank = int(os.getenv("LOCAL_RANK", "0"))
         
     args.n_gpu = args.n_gpu * args.n_nodes
+    
+    # Convert colon-separated dataset strings to lists
+    if args.sts_data_dirs:
+        args.sts_data_dirs = args.sts_data_dirs.split(':')
+    else:
+        args.sts_data_dirs = []
+    
+    if args.clf_data_dirs:
+        args.clf_data_dirs = args.clf_data_dirs.split(':')
+    else:
+        args.clf_data_dirs = []
         
     return args

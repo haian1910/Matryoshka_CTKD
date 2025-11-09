@@ -55,14 +55,21 @@ class STSDataset(Dataset):
             log_rank(f"Processing STS dataset with scores from column '{score_col}'...")
             
             for _, row in tqdm(df.iterrows(), total=len(df), disable=(dist.get_rank() != 0)):
-                # Tokenize sentence pair as a single sequence for student (BERT-style)
-                student_encoding = self.student_tokenizer(
+                # Tokenize sentence1 and sentence2 SEPARATELY for proper embedding extraction
+                student_encoding_sent1 = self.student_tokenizer(
                     row['sentence1'], 
-                    row['sentence2'],
-                    add_special_tokens=True,  # Adds [CLS] and [SEP]
+                    add_special_tokens=True,
                     max_length=self.max_length,
                     truncation=True,
-                    padding=False  # Padding will be handled in collate
+                    padding=False
+                )
+                
+                student_encoding_sent2 = self.student_tokenizer(
+                    row['sentence2'],
+                    add_special_tokens=True,
+                    max_length=self.max_length,
+                    truncation=True,
+                    padding=False
                 )
                 
                 # Convert score to float (STS scores are typically between 0-5)
@@ -75,19 +82,29 @@ class STSDataset(Dataset):
                         score = (score - min_score) / (max_score - min_score) * 5.0  # Scale to 0-5
                 
                 tokenized_data = {
-                    "student_input_ids": student_encoding['input_ids'],
-                    "student_attention_mask": student_encoding['attention_mask'],
+                    "student_input_ids_sent1": student_encoding_sent1['input_ids'],
+                    "student_attention_mask_sent1": student_encoding_sent1['attention_mask'],
+                    "student_input_ids_sent2": student_encoding_sent2['input_ids'],
+                    "student_attention_mask_sent2": student_encoding_sent2['attention_mask'],
                     "score": score
                 }
                 
                 # Add token_type_ids if the model uses them (BERT does, but not all models)
-                if 'token_type_ids' in student_encoding:
-                    tokenized_data["student_token_type_ids"] = student_encoding['token_type_ids']
+                if 'token_type_ids' in student_encoding_sent1:
+                    tokenized_data["student_token_type_ids_sent1"] = student_encoding_sent1['token_type_ids']
+                if 'token_type_ids' in student_encoding_sent2:
+                    tokenized_data["student_token_type_ids_sent2"] = student_encoding_sent2['token_type_ids']
         
-                # Tokenize for teacher if provided (also BERT-style)
+                # Tokenize for teacher if provided (also separate sentences)
                 if self.teacher_tokenizer:
-                    teacher_encoding = self.teacher_tokenizer(
+                    teacher_encoding_sent1 = self.teacher_tokenizer(
                         row['sentence1'],
+                        add_special_tokens=True,
+                        max_length=self.max_length,
+                        truncation=True,
+                        padding=False
+                    )
+                    teacher_encoding_sent2 = self.teacher_tokenizer(
                         row['sentence2'],
                         add_special_tokens=True,
                         max_length=self.max_length,
@@ -95,12 +112,16 @@ class STSDataset(Dataset):
                         padding=False
                     )
                     tokenized_data.update({
-                        "teacher_input_ids": teacher_encoding['input_ids'],
-                        "teacher_attention_mask": teacher_encoding['attention_mask'],
+                        "teacher_input_ids_sent1": teacher_encoding_sent1['input_ids'],
+                        "teacher_attention_mask_sent1": teacher_encoding_sent1['attention_mask'],
+                        "teacher_input_ids_sent2": teacher_encoding_sent2['input_ids'],
+                        "teacher_attention_mask_sent2": teacher_encoding_sent2['attention_mask'],
                     })
                     
-                    if 'token_type_ids' in teacher_encoding:
-                        tokenized_data["teacher_token_type_ids"] = teacher_encoding['token_type_ids']
+                    if 'token_type_ids' in teacher_encoding_sent1:
+                        tokenized_data["teacher_token_type_ids_sent1"] = teacher_encoding_sent1['token_type_ids']
+                    if 'token_type_ids' in teacher_encoding_sent2:
+                        tokenized_data["teacher_token_type_ids_sent2"] = teacher_encoding_sent2['token_type_ids']
 
                 dataset.append(tokenized_data)
             return dataset
@@ -108,28 +129,47 @@ class STSDataset(Dataset):
             raise FileNotFoundError(f"No such file named {path}")
         
     def _process_sentence_pair(self, i, samp, model_data, output_data):
-        # Process student input (combined sentence1 and sentence2)
-        input_ids = np.array(samp["student_input_ids"])
-        seq_len = len(input_ids)
-        model_data["input_ids"][i][:seq_len] = torch.tensor(input_ids, dtype=torch.long)
-        model_data["attention_mask"][i][:seq_len] = torch.tensor(samp["student_attention_mask"], dtype=torch.long)
+        # Process student input for sentence 1
+        input_ids_sent1 = np.array(samp["student_input_ids_sent1"])
+        seq_len_sent1 = len(input_ids_sent1)
+        model_data["input_ids_sent1"][i][:seq_len_sent1] = torch.tensor(input_ids_sent1, dtype=torch.long)
+        model_data["attention_mask_sent1"][i][:seq_len_sent1] = torch.tensor(samp["student_attention_mask_sent1"], dtype=torch.long)
         
-        # Add token_type_ids if available
-        if "student_token_type_ids" in samp:
-            model_data["token_type_ids"][i][:seq_len] = torch.tensor(samp["student_token_type_ids"], dtype=torch.long)
+        # Process student input for sentence 2
+        input_ids_sent2 = np.array(samp["student_input_ids_sent2"])
+        seq_len_sent2 = len(input_ids_sent2)
+        model_data["input_ids_sent2"][i][:seq_len_sent2] = torch.tensor(input_ids_sent2, dtype=torch.long)
+        model_data["attention_mask_sent2"][i][:seq_len_sent2] = torch.tensor(samp["student_attention_mask_sent2"], dtype=torch.long)
+        
+        # Add token_type_ids if available for sentence 1
+        if "student_token_type_ids_sent1" in samp:
+            model_data["token_type_ids_sent1"][i][:seq_len_sent1] = torch.tensor(samp["student_token_type_ids_sent1"], dtype=torch.long)
+        
+        # Add token_type_ids if available for sentence 2
+        if "student_token_type_ids_sent2" in samp:
+            model_data["token_type_ids_sent2"][i][:seq_len_sent2] = torch.tensor(samp["student_token_type_ids_sent2"], dtype=torch.long)
 
         # Process score - using float for regression
         output_data["labels"][i] = torch.tensor(samp["score"], dtype=torch.float)
 
         # Process teacher data if available
-        if "teacher_input_ids" in samp:
-            t_input_ids = np.array(samp["teacher_input_ids"])
-            t_seq_len = len(t_input_ids)
-            model_data["teacher_input_ids"][i][:t_seq_len] = torch.tensor(t_input_ids, dtype=torch.long)
-            model_data["teacher_attention_mask"][i][:t_seq_len] = torch.tensor(samp["teacher_attention_mask"], dtype=torch.long)
+        if "teacher_input_ids_sent1" in samp:
+            t_input_ids_sent1 = np.array(samp["teacher_input_ids_sent1"])
+            t_seq_len_sent1 = len(t_input_ids_sent1)
+            model_data["teacher_input_ids_sent1"][i][:t_seq_len_sent1] = torch.tensor(t_input_ids_sent1, dtype=torch.long)
+            model_data["teacher_attention_mask_sent1"][i][:t_seq_len_sent1] = torch.tensor(samp["teacher_attention_mask_sent1"], dtype=torch.long)
             
-            if "teacher_token_type_ids" in samp:
-                model_data["teacher_token_type_ids"][i][:t_seq_len] = torch.tensor(samp["teacher_token_type_ids"], dtype=torch.long)
+            if "teacher_token_type_ids_sent1" in samp:
+                model_data["teacher_token_type_ids_sent1"][i][:t_seq_len_sent1] = torch.tensor(samp["teacher_token_type_ids_sent1"], dtype=torch.long)
+        
+        if "teacher_input_ids_sent2" in samp:
+            t_input_ids_sent2 = np.array(samp["teacher_input_ids_sent2"])
+            t_seq_len_sent2 = len(t_input_ids_sent2)
+            model_data["teacher_input_ids_sent2"][i][:t_seq_len_sent2] = torch.tensor(t_input_ids_sent2, dtype=torch.long)
+            model_data["teacher_attention_mask_sent2"][i][:t_seq_len_sent2] = torch.tensor(samp["teacher_attention_mask_sent2"], dtype=torch.long)
+            
+            if "teacher_token_type_ids_sent2" in samp:
+                model_data["teacher_token_type_ids_sent2"][i][:t_seq_len_sent2] = torch.tensor(samp["teacher_token_type_ids_sent2"], dtype=torch.long)
 
     def move_to_device(self, datazip, device):
         for data in datazip:
@@ -143,15 +183,19 @@ class STSDataset(Dataset):
 
         student_pad_token_id = self.student_tokenizer.pad_token_id or 0
         
-        # Initialize model_data for student (BERT-style single sequence)
+        # Initialize model_data for student (separate fields for sentence1 and sentence2)
         model_data = {
-            "input_ids": torch.ones(bs, max_length, dtype=torch.long) * student_pad_token_id,
-            "attention_mask": torch.zeros(bs, max_length, dtype=torch.long),
+            "input_ids_sent1": torch.ones(bs, max_length, dtype=torch.long) * student_pad_token_id,
+            "attention_mask_sent1": torch.zeros(bs, max_length, dtype=torch.long),
+            "input_ids_sent2": torch.ones(bs, max_length, dtype=torch.long) * student_pad_token_id,
+            "attention_mask_sent2": torch.zeros(bs, max_length, dtype=torch.long),
         }
         
-        # Check if we need token_type_ids
-        if "student_token_type_ids" in samples[0]:
-            model_data["token_type_ids"] = torch.zeros(bs, max_length, dtype=torch.long)
+        # Check if we need token_type_ids for sentence 1 and 2
+        if "student_token_type_ids_sent1" in samples[0]:
+            model_data["token_type_ids_sent1"] = torch.zeros(bs, max_length, dtype=torch.long)
+        if "student_token_type_ids_sent2" in samples[0]:
+            model_data["token_type_ids_sent2"] = torch.zeros(bs, max_length, dtype=torch.long)
         
         # For STS, use float labels for regression
         output_data = {
@@ -162,13 +206,17 @@ class STSDataset(Dataset):
         if self.teacher_tokenizer:
             teacher_pad_token_id = self.teacher_tokenizer.pad_token_id or 0
             model_data.update({
-                "teacher_input_ids": torch.ones(bs, max_length, dtype=torch.long) * teacher_pad_token_id,
-                "teacher_attention_mask": torch.zeros(bs, max_length, dtype=torch.long),
+                "teacher_input_ids_sent1": torch.ones(bs, max_length, dtype=torch.long) * teacher_pad_token_id,
+                "teacher_attention_mask_sent1": torch.zeros(bs, max_length, dtype=torch.long),
+                "teacher_input_ids_sent2": torch.ones(bs, max_length, dtype=torch.long) * teacher_pad_token_id,
+                "teacher_attention_mask_sent2": torch.zeros(bs, max_length, dtype=torch.long),
             })
             
-            # Check if teacher model needs token_type_ids
-            if "teacher_token_type_ids" in samples[0]:
-                model_data["teacher_token_type_ids"] = torch.zeros(bs, max_length, dtype=torch.long)
+            # Check if teacher model needs token_type_ids for sentence 1 and 2
+            if "teacher_token_type_ids_sent1" in samples[0]:
+                model_data["teacher_token_type_ids_sent1"] = torch.zeros(bs, max_length, dtype=torch.long)
+            if "teacher_token_type_ids_sent2" in samples[0]:
+                model_data["teacher_token_type_ids_sent2"] = torch.zeros(bs, max_length, dtype=torch.long)
 
         # Process each sample
         for i, samp in enumerate(samples):
