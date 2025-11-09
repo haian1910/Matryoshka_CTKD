@@ -244,7 +244,7 @@ class Distiller(nn.Module):
         
         # Create dict with truncated embeddings
         embeddings_dict = {}
-        for dim in self.args.mrl_nesting_list:
+        for dim in [64, 128, 256, 512, 768]:
             embeddings_dict[f"emb_{dim}"] = full_embedding[:, :dim]
         
         return embeddings_dict
