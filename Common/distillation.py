@@ -34,6 +34,20 @@ from sklearn.metrics import precision_score, recall_score, accuracy_score
 
 torch.set_num_threads(4)
 
+def truncate_embeddings(embeddings, dim):
+    """
+    Truncate embeddings to specified dimension for MRL evaluation.
+    
+    Args:
+        embeddings: torch.Tensor of shape (batch_size, hidden_size)
+        dim: int, target dimension to truncate to
+    
+    Returns:
+        Truncated embeddings of shape (batch_size, dim)
+    """
+    if dim >= embeddings.size(-1):
+        return embeddings
+    return embeddings[:, :dim]
 
 class CLFHead(nn.Module):
     """Classification head that wraps a base model with a linear classifier"""
@@ -91,7 +105,7 @@ def prepare_dataset(args, distiller):
             distiller.student_tokenizer,
             distiller.teacher_tokenizer
         )
-        log_rank("Num of train data: {}".format(len(data["train"])))
+        print("Num of train data: {}".format(len(data["train"])))
     else:
         raise ValueError("do_train must be set to True")
         
@@ -104,11 +118,11 @@ def prepare_sts_dataset(args, distiller):
     # Check if STS data directory exists
     sts_data_dir = getattr(args, 'sts_data_dir', None)
     if not sts_data_dir:
-        log_rank("Warning: sts_data_dir not specified, skipping STS evaluation")
+        print("Warning: sts_data_dir not specified, skipping STS evaluation")
         return sts_data
     
     if not os.path.exists(sts_data_dir):
-        log_rank(f"Warning: STS data directory {sts_data_dir} does not exist")
+        print(f"Warning: STS data directory {sts_data_dir} does not exist")
         return sts_data
     
     # Temporarily change data_dir to load STS data
@@ -124,7 +138,7 @@ def prepare_sts_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of STS dev data: {}".format(len(sts_data["dev"])))
+            print("Num of STS dev data: {}".format(len(sts_data["dev"])))
         
         test_path = os.path.join(sts_data_dir, "test.csv")
         if os.path.exists(test_path):
@@ -134,7 +148,7 @@ def prepare_sts_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of STS test data: {}".format(len(sts_data["test"])))
+            print("Num of STS test data: {}".format(len(sts_data["test"])))
     finally:
         # Restore original data_dir
         args.data_dir = original_data_dir
@@ -148,11 +162,11 @@ def prepare_nli_dataset(args, distiller):
     # Check if NLI data directory exists
     nli_data_dir = getattr(args, 'nli_data_dir', None)
     if not nli_data_dir:
-        log_rank("Warning: nli_data_dir not specified, skipping NLI evaluation")
+        print("Warning: nli_data_dir not specified, skipping NLI evaluation")
         return nli_data
     
     if not os.path.exists(nli_data_dir):
-        log_rank(f"Warning: NLI data directory {nli_data_dir} does not exist")
+        print(f"Warning: NLI data directory {nli_data_dir} does not exist")
         return nli_data
     
     # Temporarily change data_dir to load NLI data
@@ -168,7 +182,7 @@ def prepare_nli_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of NLI dev data: {}".format(len(nli_data["dev"])))
+            print("Num of NLI dev data: {}".format(len(nli_data["dev"])))
         
         test_path = os.path.join(nli_data_dir, "test.csv")
         if os.path.exists(test_path):
@@ -178,7 +192,7 @@ def prepare_nli_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of NLI test data: {}".format(len(nli_data["test"])))
+            print("Num of NLI test data: {}".format(len(nli_data["test"])))
     finally:
         # Restore original data_dir
         args.data_dir = original_data_dir
@@ -186,7 +200,7 @@ def prepare_nli_dataset(args, distiller):
     return nli_data
 
 def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, optimizer: AdamW, lr_scheduler, dataset, device):
-    log_rank("Start Contrastive Learning Training")
+    print("Start Contrastive Learning Training")
     start_time = time.time()
 
     if args.model_parallel:
@@ -227,9 +241,9 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
         sampler.set_epoch(epoch)
         logging_output["epoch"] += 1
         
-        log_rank("Start iterations of epoch {}".format(epoch + 1))
+        print("Start iterations of epoch {}".format(epoch + 1))
         model.train()
-        log_rank("Training mode: {}".format(model.student_model.training))
+        print("Training mode: {}".format(model.student_model.training))
 
         epoch_start_time = time.time()
         step = 0
@@ -253,7 +267,7 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
             )
             
             if torch.isnan(loss) or torch.isinf(loss):
-                log_rank("⚠️ Loss is NaN or Inf. Skipping this step.")
+                print("⚠️ Loss is NaN or Inf. Skipping this step.")
                 continue
 
             model.backward(loss)
@@ -288,12 +302,12 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
             total_samples_global = total_samples * dp_world_size
             avg_accuracy = total_correct / total_samples_global if total_samples_global > 0 else 0.0
             
-            log_rank(f"Epoch {epoch + 1} Summary:")
-            log_rank(f"  Average Loss: {avg_loss:.4f}")
-            log_rank(f"  Average Accuracy: {avg_accuracy:.4f}")
-            log_rank(f"  Samples Processed: {total_samples_global}")
-            log_rank(f"  Time: {epoch_time:.2f}s")
-            log_rank(f"  Throughput: {total_samples_global / epoch_time:.2f} samples/s")
+            print(f"Epoch {epoch + 1} Summary:")
+            print(f"  Average Loss: {avg_loss:.4f}")
+            print(f"  Average Accuracy: {avg_accuracy:.4f}")
+            print(f"  Samples Processed: {total_samples_global}")
+            print(f"  Time: {epoch_time:.2f}s")
+            print(f"  Throughput: {total_samples_global / epoch_time:.2f} samples/s")
 
         # Save checkpoint at intervals
         if dist.get_rank() == 0 and args.save_dir and (epoch + 1) % args.save_interval == 0:
@@ -313,15 +327,15 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
             os.makedirs(save_dir_path, exist_ok=True)
             
             if not args.only_save_projector:
-                log_rank("Saving tokenizer...")
+                print("Saving tokenizer...")
                 tokenizer.save_pretrained(save_dir_path)
-                log_rank("Saving model...")
+                print("Saving model...")
                 model.module.student_model.save_pretrained(save_dir_path, safe_serialization=False)
-                log_rank("Saving config...")
+                print("Saving config...")
                 model.module.student_model.config.save_pretrained(save_dir_path)
             
             if hasattr(model.module, "projectors"):
-                log_rank("Saving projector...")
+                print("Saving projector...")
                 torch.save(
                     model.module.projectors.state_dict(), 
                     os.path.join(save_dir_path, "projector.pt")
@@ -335,14 +349,14 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
             if len(model_list) > args.keep_best_n_checkpoints:
                 removed_model = model_list.pop(-1)  # Remove lowest accuracy
                 shutil.rmtree(removed_model["path"])
-                log_rank(f"Removed checkpoint: {removed_model['path']}")
+                print(f"Removed checkpoint: {removed_model['path']}")
 
-            log_rank(f"Model has been saved to {save_dir_path}")
+            print(f"Model has been saved to {save_dir_path}")
         
         dist.barrier()
             
     total_seconds = time.time() - start_time
-    log_rank("Done training in {:0>2}:{:0>2}:{:0>2}".format(
+    print("Done training in {:0>2}:{:0>2}:{:0>2}".format(
         int(total_seconds // 3600), 
         int(total_seconds % 3600 // 60), 
         int(total_seconds % 60)
@@ -353,7 +367,7 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
         final_save_dir = os.path.join(args.save_dir, "final_model")
         os.makedirs(final_save_dir, exist_ok=True)
         
-        log_rank("Saving final model...")
+        print("Saving final model...")
         tokenizer.save_pretrained(final_save_dir)
         model.module.student_model.save_pretrained(final_save_dir, safe_serialization=False)
         model.module.student_model.config.save_pretrained(final_save_dir)
@@ -364,17 +378,20 @@ def finetune(args, tokenizer: AutoTokenizer, model: deepspeed.DeepSpeedEngine, o
                 os.path.join(final_save_dir, "projector.pt")
             )
         
-        log_rank(f"Final model saved to {final_save_dir}")
+        print(f"Final model saved to {final_save_dir}")
 
 
 @torch.no_grad()
 def evaluate_sts(args, tokenizer, student_model, dataset, split, device):
     """
     Evaluate model on STS tasks with Pearson and Spearman correlations.
-    Mimics STS/distillation.py evaluate function.
+    Supports MRL evaluation at multiple dimensions.
     """
     if dist.get_rank() != 0:
-        return None, None, None, None        
+        return None
+    
+    # Get matryoshka dimensions from args
+    matryoshka_dims = getattr(args, 'matryoshka_dims', [16, 32, 64, 128, 256, 512, 768])  # Default to full dimension
     
     # Use regular DataLoader without DistributedSampler
     dataloader = DataLoader(
@@ -386,16 +403,11 @@ def evaluate_sts(args, tokenizer, student_model, dataset, split, device):
     )
 
     student_model.eval()
-    eval_info = {
-        "loss": 0.0,
-        "sample_num": 0
-    }
-
-    all_preds = []
-    all_targets = []
-    total_loss = 0
     
-    for input_batch, output_batch in tqdm(dataloader, desc="Processing batches"):
+    # Store predictions and targets for each dimension
+    dim_results = {dim: {"preds": [], "targets": []} for dim in matryoshka_dims}
+    
+    for input_batch, output_batch in tqdm(dataloader, desc=f"Evaluating STS {split}"):
         dataset.move_to_device([input_batch, output_batch], device)
         targets = output_batch["labels"]
         
@@ -405,76 +417,71 @@ def evaluate_sts(args, tokenizer, student_model, dataset, split, device):
             token_type_ids=input_batch.get("token_type_ids", None)
         )
         
-        # Get predictions - could be scores from a regression head or embeddings
-        if hasattr(outputs, 'scores'):
-            predictions = outputs.scores 
-        elif hasattr(outputs, 'last_hidden_state'):
-            # Use mean pooling for embeddings if no scores attribute
-            last_hidden = outputs.last_hidden_state
-            attention_mask_expanded = input_batch["attention_mask"].unsqueeze(-1).expand(last_hidden.size()).float()
-            sum_embeddings = torch.sum(last_hidden * attention_mask_expanded, 1)
-            sum_mask = torch.clamp(attention_mask_expanded.sum(1), min=1e-9)
-            embeddings = sum_embeddings / sum_mask
-            # Use embedding norm scaled to [0, 5] as predictions
-            predictions = torch.norm(embeddings, dim=-1, keepdim=True) / torch.norm(embeddings).max() * 5.0
-        else:
-            raise ValueError("Cannot extract predictions from model output")
+        # Get embeddings using mean pooling
+        last_hidden = outputs.last_hidden_state
+        attention_mask_expanded = input_batch["attention_mask"].unsqueeze(-1).expand(last_hidden.size()).float()
+        sum_embeddings = torch.sum(last_hidden * attention_mask_expanded, 1)
+        sum_mask = torch.clamp(attention_mask_expanded.sum(1), min=1e-9)
+        embeddings = sum_embeddings / sum_mask
         
-        # Ensure predictions and targets have compatible shapes
-        if len(predictions.shape) == 1:
-            predictions = predictions.unsqueeze(-1)
+        # Ensure targets have compatible shape
         if len(targets.shape) == 1:
             targets = targets.unsqueeze(-1)
+        
+        # Evaluate at each dimension
+        for dim in matryoshka_dims:
+            # Truncate embeddings to current dimension
+            truncated_emb = truncate_embeddings(embeddings, dim)
             
-        # Compute MSE loss
-        loss = F.mse_loss(predictions, targets)
-        
-        all_preds.append(predictions)
-        all_targets.append(targets)
-        sample_num = targets.size(0)
-        total_loss += loss.item() * sample_num
-
-        eval_info["sample_num"] += sample_num
-        
-    all_preds = torch.cat(all_preds, dim=0)
-    all_targets = torch.cat(all_targets, dim=0)
-
-    # Convert to float32 before converting to numpy (BFloat16 is not supported by numpy)
-    all_preds = all_preds.to(torch.float32)
-    all_targets = all_targets.to(torch.float32)
-
-    # Convert to numpy for correlation metrics
-    all_preds_np = all_preds.cpu().numpy().flatten()
-    all_targets_np = all_targets.cpu().numpy().flatten()
-
-    # Calculate Pearson and Spearman correlations
-    from scipy.stats import pearsonr, spearmanr
-    pearson_correlation, _ = pearsonr(all_preds_np, all_targets_np)
-    spearman_correlation, _ = spearmanr(all_preds_np, all_targets_np)
+            # Use cosine similarity as predictions (scaled to [0, 5])
+            # For sentence pairs, we would compare two embeddings
+            # Here we use embedding norm as a proxy (adjust based on your task)
+            predictions = torch.norm(truncated_emb, dim=-1, keepdim=True)
+            predictions = (predictions / predictions.max()) * 5.0
+            
+            dim_results[dim]["preds"].append(predictions)
+            dim_results[dim]["targets"].append(targets)
     
-    # Update evaluation info
-    eval_info["loss"] = float(total_loss / eval_info["sample_num"])
-    eval_info["pearson"] = round(float(pearson_correlation), 6)
-    eval_info["spearman"] = round(float(spearman_correlation), 6)
-    eval_info["mse"] = round(float(((all_preds_np - all_targets_np) ** 2).mean()), 6)
-
-    if hasattr(args, 'local_rank') and args.local_rank == 0 or not hasattr(args, 'local_rank'):
-        log_rank(f"Evaluated: {split} | {eval_info}")
-
+    # Compute metrics for each dimension
+    results = {}
+    for dim in matryoshka_dims:
+        all_preds = torch.cat(dim_results[dim]["preds"], dim=0)
+        all_targets = torch.cat(dim_results[dim]["targets"], dim=0)
+        
+        # Convert to float32 before numpy conversion
+        all_preds = all_preds.to(torch.float32).cpu().numpy().flatten()
+        all_targets = all_targets.to(torch.float32).cpu().numpy().flatten()
+        
+        # Calculate correlations
+        pearson_corr, _ = pearsonr(all_preds, all_targets)
+        spearman_corr, _ = spearmanr(all_preds, all_targets)
+        mse = ((all_preds - all_targets) ** 2).mean()
+        
+        results[dim] = {
+            "pearson": round(float(pearson_corr), 6),
+            "spearman": round(float(spearman_corr), 6),
+            "mse": round(float(mse), 6)
+        }
+        
+        print(f"STS {split} | Dim {dim:4d} | Pearson: {results[dim]['pearson']:.4f} | "
+              f"Spearman: {results[dim]['spearman']:.4f} | MSE: {results[dim]['mse']:.4f}")
+    
     student_model.train()
-
-    return eval_info["loss"], eval_info["pearson"], eval_info["spearman"]
+    return results
 
 @torch.no_grad()
 def evaluate_nli(args, tokenizer, student_model, dataset, split, device):
     """
     Evaluate model on NLI tasks with accuracy, precision, and recall.
-    Mimics SentencePair/distillation.py evaluate function.
+    Supports MRL evaluation at multiple dimensions.
     """
     if dist.get_rank() != 0:
-        return None, None, None, None        
+        return None
     
-    # Use regular DataLoader without DistributedSampler
+    # Get matryoshka dimensions from args
+    matryoshka_dims = getattr(args, 'matryoshka_dims', [16, 32, 64, 128, 256, 512, 768])
+    num_labels = getattr(args, 'num_labels', 3)  # Typically 3 for NLI
+    
     dataloader = DataLoader(
         dataset,
         shuffle=False,
@@ -484,17 +491,20 @@ def evaluate_nli(args, tokenizer, student_model, dataset, split, device):
     )
 
     student_model.eval()
-    eval_info = {
-        "loss": 0.0,
-        "sample_num": 0,
-        "correct_samples": 0
-    }
-
-    all_preds = []
-    all_labels = []
-    total_loss = 0
     
-    for input_batch, output_batch in tqdm(dataloader, desc="Processing batches"):
+    # Create classification heads for each dimension (simple linear layer)
+    clf_heads = {}
+    for dim in matryoshka_dims:
+        clf_head = nn.Linear(dim, num_labels).to(device)
+        # Initialize with xavier uniform
+        nn.init.xavier_uniform_(clf_head.weight)
+        nn.init.zeros_(clf_head.bias)
+        clf_heads[dim] = clf_head
+    
+    # Store predictions and labels for each dimension
+    dim_results = {dim: {"preds": [], "labels": [], "losses": []} for dim in matryoshka_dims}
+    
+    for input_batch, output_batch in tqdm(dataloader, desc=f"Evaluating NLI {split}"):
         dataset.move_to_device([input_batch, output_batch], device)
         labels = output_batch["labels"]
         
@@ -504,58 +514,68 @@ def evaluate_nli(args, tokenizer, student_model, dataset, split, device):
             token_type_ids=input_batch.get("token_type_ids", None)
         )
         
-        # Get predictions - check if model has logits (classification head) or embeddings
-        if hasattr(outputs, 'logits'):
-            logits = outputs.logits
-            preds = logits.argmax(dim=-1)
-            # Try to get loss if available
-            if hasattr(outputs, 'loss') and outputs.loss is not None:
-                loss = outputs.loss
-            else:
-                # Compute cross-entropy loss if not available
-                loss = F.cross_entropy(logits, labels)
-        else:
-            raise ValueError("Cannot extract logits from model output for NLI classification")
+        # Get embeddings using mean pooling
+        last_hidden = outputs.last_hidden_state
+        attention_mask_expanded = input_batch["attention_mask"].unsqueeze(-1).expand(last_hidden.size()).float()
+        sum_embeddings = torch.sum(last_hidden * attention_mask_expanded, 1)
+        sum_mask = torch.clamp(attention_mask_expanded.sum(1), min=1e-9)
+        embeddings = sum_embeddings / sum_mask
         
-        correct = (preds == labels).sum().item()
-        all_preds.append(preds)
-        all_labels.append(labels)
-        sample_num = labels.size(0)
-        total_loss += loss.item() * sample_num
-
-        eval_info["sample_num"] += sample_num
-        eval_info["correct_samples"] += correct
-
-    all_preds = torch.cat(all_preds, dim=0).cpu().numpy()
-    all_labels = torch.cat(all_labels, dim=0).cpu().numpy()
-
-    precision = precision_score(all_labels, all_preds, average='macro', zero_division=0)
-    recall = recall_score(all_labels, all_preds, average='macro', zero_division=0)
-    accuracy = accuracy_score(all_labels, all_preds)
-    avg_loss = total_loss / eval_info["sample_num"] if eval_info["sample_num"] > 0 else 0.0
-
-    eval_info["precision"] = round(float(precision), 6)
-    eval_info["recall"] = round(float(recall), 6)
-    eval_info["loss"] = round(float(avg_loss), 6)
-    eval_info["accuracy"] = round(float(accuracy), 6)
-
-    if hasattr(args, 'local_rank') and args.local_rank == 0 or not hasattr(args, 'local_rank'):
-        log_rank(f"Evaluated: {split} | {eval_info}")
-
+        # Evaluate at each dimension
+        for dim in matryoshka_dims:
+            truncated_emb = truncate_embeddings(embeddings, dim)
+            
+            # Get logits from classification head
+            logits = clf_heads[dim](truncated_emb)
+            preds = logits.argmax(dim=-1)
+            
+            # Compute loss
+            loss = F.cross_entropy(logits, labels)
+            
+            dim_results[dim]["preds"].append(preds)
+            dim_results[dim]["labels"].append(labels)
+            dim_results[dim]["losses"].append(loss.item() * labels.size(0))
+    
+    # Compute metrics for each dimension
+    results = {}
+    for dim in matryoshka_dims:
+        all_preds = torch.cat(dim_results[dim]["preds"], dim=0).cpu().numpy()
+        all_labels = torch.cat(dim_results[dim]["labels"], dim=0).cpu().numpy()
+        total_loss = sum(dim_results[dim]["losses"])
+        total_samples = len(all_labels)
+        
+        precision = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+        recall = recall_score(all_labels, all_preds, average='macro', zero_division=0)
+        accuracy = accuracy_score(all_labels, all_preds)
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        
+        results[dim] = {
+            "accuracy": round(float(accuracy), 6),
+            "precision": round(float(precision), 6),
+            "recall": round(float(recall), 6),
+            "loss": round(float(avg_loss), 6)
+        }
+        
+        print(f"NLI {split} | Dim {dim:4d} | Acc: {results[dim]['accuracy']:.4f} | "
+              f"Prec: {results[dim]['precision']:.4f} | Rec: {results[dim]['recall']:.4f} | "
+              f"Loss: {results[dim]['loss']:.4f}")
+    
     student_model.train()
-
-    return eval_info["loss"], eval_info["accuracy"], eval_info["precision"], eval_info["recall"]
+    return results
 
 @torch.no_grad()
 def evaluate_clf(args, tokenizer, student_model, dataset, split, device):
     """
     Evaluate model on classification tasks with accuracy, precision, and recall.
-    Mimics Classification/distillation.py evaluate function.
+    Supports MRL evaluation at multiple dimensions.
     """
     if dist.get_rank() != 0:
-        return None, None, None, None        
+        return None
     
-    # Use regular DataLoader without DistributedSampler
+    # Get matryoshka dimensions from args
+    matryoshka_dims = getattr(args, 'matryoshka_dims', [16, 32, 64, 128, 256, 512, 768])
+    num_labels = getattr(args, 'num_labels', 2)  # Binary classification default
+    
     dataloader = DataLoader(
         dataset,
         shuffle=False,
@@ -565,17 +585,19 @@ def evaluate_clf(args, tokenizer, student_model, dataset, split, device):
     )
 
     student_model.eval()
-    eval_info = {
-        "loss": 0.0,
-        "sample_num": 0,
-        "correct_samples": 0
-    }
-
-    all_preds = []
-    all_labels = []
-    total_loss = 0
     
-    for input_batch, output_batch in tqdm(dataloader, desc="Processing batches"):
+    # Create classification heads for each dimension
+    clf_heads = {}
+    for dim in matryoshka_dims:
+        clf_head = nn.Linear(dim, num_labels).to(device)
+        nn.init.xavier_uniform_(clf_head.weight)
+        nn.init.zeros_(clf_head.bias)
+        clf_heads[dim] = clf_head
+    
+    # Store predictions and labels for each dimension
+    dim_results = {dim: {"preds": [], "labels": [], "losses": []} for dim in matryoshka_dims}
+    
+    for input_batch, output_batch in tqdm(dataloader, desc=f"Evaluating CLF {split}"):
         dataset.move_to_device([input_batch, output_batch], device)
         labels = output_batch["labels"]
         
@@ -585,43 +607,54 @@ def evaluate_clf(args, tokenizer, student_model, dataset, split, device):
             token_type_ids=input_batch.get("token_type_ids", None)
         )
         
-        # Get predictions - check if model has logits (classification head)
-        if hasattr(outputs, 'logits'):
-            logits = outputs.logits
-            preds = logits.argmax(dim=-1)
-            # Compute cross-entropy loss manually since BertModel doesn't accept labels
-            loss = F.cross_entropy(logits, labels)
-        else:
-            raise ValueError("Cannot extract logits from model output for classification")
+        # Get embeddings using mean pooling
+        last_hidden = outputs.last_hidden_state
+        attention_mask_expanded = input_batch["attention_mask"].unsqueeze(-1).expand(last_hidden.size()).float()
+        sum_embeddings = torch.sum(last_hidden * attention_mask_expanded, 1)
+        sum_mask = torch.clamp(attention_mask_expanded.sum(1), min=1e-9)
+        embeddings = sum_embeddings / sum_mask
         
-        correct = (preds == labels).sum().item()
-        all_preds.append(preds)
-        all_labels.append(labels)
-        sample_num = labels.size(0)
-        total_loss += loss.item() * sample_num
-
-        eval_info["sample_num"] += sample_num
-        eval_info["correct_samples"] += correct
-
-    all_preds = torch.cat(all_preds, dim=0).cpu().numpy()
-    all_labels = torch.cat(all_labels, dim=0).cpu().numpy()
-
-    precision = precision_score(all_labels, all_preds, average='macro', zero_division=0)
-    recall = recall_score(all_labels, all_preds, average='macro', zero_division=0)
-    accuracy = accuracy_score(all_labels, all_preds)
-    avg_loss = total_loss / eval_info["sample_num"] if eval_info["sample_num"] > 0 else 0.0
-
-    eval_info["precision"] = round(float(precision), 6)
-    eval_info["recall"] = round(float(recall), 6)
-    eval_info["loss"] = round(float(avg_loss), 6)
-    eval_info["accuracy"] = round(float(accuracy), 6)
-
-    if hasattr(args, 'local_rank') and args.local_rank == 0 or not hasattr(args, 'local_rank'):
-        log_rank(f"Evaluated: {split} | {eval_info}")
-
+        # Evaluate at each dimension
+        for dim in matryoshka_dims:
+            truncated_emb = truncate_embeddings(embeddings, dim)
+            
+            # Get logits from classification head
+            logits = clf_heads[dim](truncated_emb)
+            preds = logits.argmax(dim=-1)
+            
+            # Compute loss
+            loss = F.cross_entropy(logits, labels)
+            
+            dim_results[dim]["preds"].append(preds)
+            dim_results[dim]["labels"].append(labels)
+            dim_results[dim]["losses"].append(loss.item() * labels.size(0))
+    
+    # Compute metrics for each dimension
+    results = {}
+    for dim in matryoshka_dims:
+        all_preds = torch.cat(dim_results[dim]["preds"], dim=0).cpu().numpy()
+        all_labels = torch.cat(dim_results[dim]["labels"], dim=0).cpu().numpy()
+        total_loss = sum(dim_results[dim]["losses"])
+        total_samples = len(all_labels)
+        
+        precision = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+        recall = recall_score(all_labels, all_preds, average='macro', zero_division=0)
+        accuracy = accuracy_score(all_labels, all_preds)
+        avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+        
+        results[dim] = {
+            "accuracy": round(float(accuracy), 6),
+            "precision": round(float(precision), 6),
+            "recall": round(float(recall), 6),
+            "loss": round(float(avg_loss), 6)
+        }
+        
+        print(f"CLF {split} | Dim {dim:4d} | Acc: {results[dim]['accuracy']:.4f} | "
+              f"Prec: {results[dim]['precision']:.4f} | Rec: {results[dim]['recall']:.4f} | "
+              f"Loss: {results[dim]['loss']:.4f}")
+    
     student_model.train()
-
-    return eval_info["loss"], eval_info["accuracy"], eval_info["precision"], eval_info["recall"]
+    return results
 
 
 def prepare_clf_dataset(args, distiller):
@@ -631,11 +664,11 @@ def prepare_clf_dataset(args, distiller):
     # Check if CLF data directory exists
     clf_data_dir = getattr(args, 'clf_data_dir', None)
     if not clf_data_dir:
-        log_rank("Warning: clf_data_dir not specified, skipping CLF fine-tuning")
+        print("Warning: clf_data_dir not specified, skipping CLF fine-tuning")
         return clf_data
     
     if not os.path.exists(clf_data_dir):
-        log_rank(f"Warning: CLF data directory {clf_data_dir} does not exist")
+        print(f"Warning: CLF data directory {clf_data_dir} does not exist")
         return clf_data
     
     # Temporarily change data_dir to load CLF data
@@ -652,7 +685,7 @@ def prepare_clf_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of CLF train data: {}".format(len(clf_data["train"])))
+            print("Num of CLF train data: {}".format(len(clf_data["train"])))
         
         # Load dev data
         dev_path = os.path.join(clf_data_dir, "dev.csv")
@@ -663,7 +696,7 @@ def prepare_clf_dataset(args, distiller):
                 distiller.student_tokenizer,
                 distiller.teacher_tokenizer
             )
-            log_rank("Num of CLF dev data: {}".format(len(clf_data["dev"])))
+            print("Num of CLF dev data: {}".format(len(clf_data["dev"])))
     finally:
         # Restore original data_dir
         args.data_dir = original_data_dir
@@ -673,13 +706,13 @@ def prepare_clf_dataset(args, distiller):
 
 def finetune_clf(args, tokenizer, model_engine, dataset, device):
     """Fine-tune classifier head on CLF dataset"""
-    log_rank("\n" + "="*50)
-    log_rank("Start Classification Head Fine-tuning (frozen base model)")
-    log_rank("="*50)
+    print("\n" + "="*50)
+    print("Start Classification Head Fine-tuning (frozen base model)")
+    print("="*50)
     start_time = time.time()
 
     if "train" not in dataset or "dev" not in dataset:
-        log_rank("Warning: train or dev dataset missing for CLF fine-tuning")
+        print("Warning: train or dev dataset missing for CLF fine-tuning")
         return
     
     dp_world_size = dist.get_world_size()
@@ -715,7 +748,7 @@ def finetune_clf(args, tokenizer, model_engine, dataset, device):
         sampler.set_epoch(epoch)
         logging_output["epoch"] += 1
         
-        log_rank(f"\nCLF Fine-tuning Epoch {epoch + 1}/{clf_epochs}")
+        print(f"\nCLF Fine-tuning Epoch {epoch + 1}/{clf_epochs}")
         model_engine.train()
 
         epoch_start_time = time.time()
@@ -742,7 +775,7 @@ def finetune_clf(args, tokenizer, model_engine, dataset, device):
             loss = outputs.loss
             
             if torch.isnan(loss) or torch.isinf(loss):
-                log_rank("⚠️ Loss is NaN or Inf. Skipping this step.")
+                print("⚠️ Loss is NaN or Inf. Skipping this step.")
                 continue
 
             model_engine.backward(loss)
@@ -778,23 +811,23 @@ def finetune_clf(args, tokenizer, model_engine, dataset, device):
             total_samples_global = total_samples * dp_world_size
             avg_accuracy = total_correct / total_samples_global if total_samples_global > 0 else 0.0
             
-            log_rank(f"CLF Epoch {epoch + 1} Summary:")
-            log_rank(f"  Average Loss: {avg_loss:.4f}")
-            log_rank(f"  Average Accuracy: {avg_accuracy:.4f}")
-            log_rank(f"  Samples: {total_samples_global}")
-            log_rank(f"  Time: {epoch_time:.2f}s")
+            print(f"CLF Epoch {epoch + 1} Summary:")
+            print(f"  Average Loss: {avg_loss:.4f}")
+            print(f"  Average Accuracy: {avg_accuracy:.4f}")
+            print(f"  Samples: {total_samples_global}")
+            print(f"  Time: {epoch_time:.2f}s")
         
         dist.barrier()
     
     total_seconds = time.time() - start_time
-    log_rank("\nClassification Fine-tuning Done in {:0>2}:{:0>2}:{:0>2}".format(
+    print("\nClassification Fine-tuning Done in {:0>2}:{:0>2}:{:0>2}".format(
         int(total_seconds // 3600), 
         int(total_seconds % 3600 // 60), 
         int(total_seconds % 60)
     ))
     
     # Evaluate on CLF dev set
-    log_rank("\nEvaluating on CLF dev set...")
+    print("\nEvaluating on CLF dev set...")
     model_engine.eval()
     dev_loss, dev_accuracy, dev_precision, dev_recall = evaluate_clf_dev(
         args, 
@@ -802,7 +835,7 @@ def finetune_clf(args, tokenizer, model_engine, dataset, device):
         dataset["dev"],
         device
     )
-    log_rank(f"CLF Dev Results - Loss: {dev_loss}, Acc: {dev_accuracy}, Prec: {dev_precision}, Rec: {dev_recall}")
+    print(f"CLF Dev Results - Loss: {dev_loss}, Acc: {dev_accuracy}, Prec: {dev_precision}, Rec: {dev_recall}")
 
 
 @torch.no_grad()
@@ -880,13 +913,13 @@ def main():
     
     with open(args.deepspeed_config, "r") as f:
         ds_config = json.load(f)
-    log_rank('DeepSpeed config: {}'.format(ds_config))
+    print('DeepSpeed config: {}'.format(ds_config))
 
     ds_config["gradient_accumulation_steps"] = args.gradient_accumulation_steps
     ds_config["train_micro_batch_size_per_gpu"] = args.batch_size
     ds_config["train_batch_size"] = args.batch_size * args.gradient_accumulation_steps * dp_world_size
 
-    log_rank("Initializing a distiller for contrastive learning...")
+    print("Initializing a distiller for contrastive learning...")
     distiller = Distiller(args, device)
     dataset = prepare_dataset(args, distiller)
     
@@ -898,9 +931,9 @@ def main():
         if args.num_epochs is None:
             args.num_epochs = math.ceil(args.total_iters / args.train_iters_per_epoch)
 
-        log_rank("Total iterations: {}".format(args.total_iters))
-        log_rank("Number of epochs: {}".format(args.num_epochs))
-        log_rank("Iterations per epoch: {}".format(args.train_iters_per_epoch))
+        print("Total iterations: {}".format(args.total_iters))
+        print("Number of epochs: {}".format(args.num_epochs))
+        print("Iterations per epoch: {}".format(args.train_iters_per_epoch))
         
         if args.save_interval == -1:
             args.save_interval = args.train_iters_per_epoch
@@ -927,14 +960,16 @@ def main():
     else:
         raise ValueError("do_train must be set to True for contrastive learning")
     
-    # Evaluate on STS dev/test sets after training if do_eval is enabled
+    # Replace the STS evaluation section in main() with:
     if args.do_train and hasattr(args, 'do_eval') and args.do_eval:
-        log_rank("Preparing STS evaluation datasets...")
+        print("Preparing STS evaluation datasets...")
         sts_eval_data = prepare_sts_dataset(args, distiller)
         
         if "dev" in sts_eval_data:
-            log_rank("Evaluating on STS dev set...")
-            dev_loss, dev_pearson, dev_spearman = evaluate_sts(
+            print("\n" + "="*60)
+            print("Evaluating on STS dev set with MRL dimensions")
+            print("="*60)
+            dev_results = evaluate_sts(
                 args, 
                 distiller.student_tokenizer, 
                 model_engine.module.student_model, 
@@ -944,8 +979,10 @@ def main():
             )
         
         if "test" in sts_eval_data:
-            log_rank("Evaluating on STS test set...")
-            test_loss, test_pearson, test_spearman = evaluate_sts(
+            print("\n" + "="*60)
+            print("Evaluating on STS test set with MRL dimensions")
+            print("="*60)
+            test_results = evaluate_sts(
                 args, 
                 distiller.student_tokenizer, 
                 model_engine.module.student_model, 
@@ -953,14 +990,15 @@ def main():
                 "test", 
                 device
             )
+        
     
     # # Evaluate on NLI dev/test sets after training if do_eval is enabled
     # if args.do_train and hasattr(args, 'do_eval') and args.do_eval:
-    #     log_rank("Preparing NLI evaluation datasets...")
+    #     print("Preparing NLI evaluation datasets...")
     #     nli_eval_data = prepare_nli_dataset(args, distiller)
         
     #     if "dev" in nli_eval_data:
-    #         log_rank("Evaluating on NLI dev set...")
+    #         print("Evaluating on NLI dev set...")
     #         dev_loss, dev_accuracy, dev_precision, dev_recall = evaluate_nli(
     #             args, 
     #             distiller.student_tokenizer, 
@@ -971,7 +1009,7 @@ def main():
     #         )
         
     #     if "test" in nli_eval_data:
-    #         log_rank("Evaluating on NLI test set...")
+    #         print("Evaluating on NLI test set...")
     #         test_loss, test_accuracy, test_precision, test_recall = evaluate_nli(
     #             args, 
     #             distiller.student_tokenizer, 
@@ -982,14 +1020,14 @@ def main():
     #         )
     
     # Evaluate on CLF dev/test sets after training if do_eval is enabled
-    log_rank("\n" + "="*60)
-    log_rank("Checking for CLF fine-tuning...")
-    log_rank("="*60)
+    print("\n" + "="*60)
+    print("Checking for CLF fine-tuning...")
+    print("="*60)
     clf_data = prepare_clf_dataset(args, distiller)
     
     if clf_data and "train" in clf_data and "dev" in clf_data:
         # Create classification head
-        log_rank("Creating classification head with frozen base model...")
+        print("Creating classification head with frozen base model...")
         hidden_size = distiller.student_model.config.hidden_size
         num_labels = args.num_labels
         
@@ -1036,9 +1074,9 @@ def main():
         # Fine-tune classifier
         finetune_clf(args, distiller.student_tokenizer, clf_engine, clf_data, device)
         
-        log_rank("Classification fine-tuning complete!")
+        print("Classification fine-tuning complete!")
     else:
-        log_rank("Skipping CLF fine-tuning (clf_data_dir not specified or missing train/dev data)")
+        print("Skipping CLF fine-tuning (clf_data_dir not specified or missing train/dev data)")
     
 if __name__ == "__main__":
     main()
