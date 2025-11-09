@@ -25,10 +25,12 @@ class Distiller(nn.Module):
         self.device = device
         self.student_model, self.student_tokenizer = self.load_student_model()
         
-        if self.args.teacher_model_path is not None:
+        # Load teacher model for distillation (required for matry_ctkd criterion)
+        if hasattr(self.args, 'teacher_model_path') and self.args.teacher_model_path is not None:
             self.teacher_model, self.teacher_tokenizer = self.load_teacher_model()
         else:
-            self.teacher_model, self.teacher_tokenizer = None, None
+            # For matry_ctkd, we always need a teacher model (uses hardcoded LLM2Vec)
+            self.teacher_model, self.teacher_tokenizer = self.load_teacher_model()
 
     @staticmethod
     def add_distiller_args(parser):
@@ -195,40 +197,40 @@ class Distiller(nn.Module):
         teacher_model = teacher_model.merge_and_unload()
 
         teacher_model = PeftModel.from_pretrained(
-            teacher_model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-unsup-simcse"
+            teacher_model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised"
         )
         teacher_model = teacher_model.merge_and_unload()
 
-        if hasattr(self.args, 'teacher_model_path') and self.args.teacher_model_path:
-            adapter_path = os.path.join(self.args.teacher_model_path, "adapter_model.bin")
-            fixed_adapter_path = adapter_path + ".fixed"
+        # if hasattr(self.args, 'teacher_model_path') and self.args.teacher_model_path:
+        #     adapter_path = os.path.join(self.args.teacher_model_path, "adapter_model.bin")
+        #     fixed_adapter_path = adapter_path + ".fixed"
             
-            if not os.path.exists(fixed_adapter_path):
-                if dist.get_rank() == 0:
-                    checkpoint = torch.load(adapter_path)            
-                    fixed_checkpoint = {}
+        #     if not os.path.exists(fixed_adapter_path):
+        #         if dist.get_rank() == 0:
+        #             checkpoint = torch.load(adapter_path)            
+        #             fixed_checkpoint = {}
                     
-                    for key, value in checkpoint.items():
-                        if "lora_A.weight" in key and "default" not in key:
-                            key = key.replace("lora_A.weight", "lora_A.default.weight")
-                        if "lora_B.weight" in key and "default" not in key:
-                            key = key.replace("lora_B.weight", "lora_B.default.weight")
-                        if "base_model.model.base_model.model" in key:
-                            key = key.replace("base_model.model.base_model.model", "base_model.model")
+        #             for key, value in checkpoint.items():
+        #                 if "lora_A.weight" in key and "default" not in key:
+        #                     key = key.replace("lora_A.weight", "lora_A.default.weight")
+        #                 if "lora_B.weight" in key and "default" not in key:
+        #                     key = key.replace("lora_B.weight", "lora_B.default.weight")
+        #                 if "base_model.model.base_model.model" in key:
+        #                     key = key.replace("base_model.model.base_model.model", "base_model.model")
                             
-                        fixed_checkpoint[key] = value
+        #                 fixed_checkpoint[key] = value
                     
-                    if fixed_checkpoint: 
-                        torch.save(fixed_checkpoint, fixed_adapter_path)
+        #             if fixed_checkpoint: 
+        #                 torch.save(fixed_checkpoint, fixed_adapter_path)
             
-            dist.barrier()  
+        #     dist.barrier()  
             
-            teacher_model = PeftModel.from_pretrained(
-                teacher_model,
-                self.args.teacher_model_path,
-                adapter_name="default",
-                adapter_weights_path=fixed_adapter_path
-            )
+        #     teacher_model = PeftModel.from_pretrained(
+        #         teacher_model,
+        #         self.args.teacher_model_path,
+        #         adapter_name="default",
+        #         adapter_weights_path=fixed_adapter_path
+        #     )
 
         # Set teacher model to eval mode and freeze parameters
         teacher_model.eval()

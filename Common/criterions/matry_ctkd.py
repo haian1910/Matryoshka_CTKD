@@ -186,14 +186,49 @@ class MATRY_CTKD(Matry_InfoNCELoss):
 
         self.projectors = nn.ModuleDict()
         
+        # Default to 2048, will be updated after distiller is initialized
+        # This will be set properly when we have access to teacher_hidden_size
+        self.output_dim = 2048
+        self.projectors_initialized = False
+        
+        # Initialize projectors with default output_dim
+        # These will be re-initialized in compute_matry_ctkd if needed
         for dim in self.nesting_list:
             self.projectors[f'proj_{dim}'] = OrthogonalProjection(
                 in_dim=dim, 
-                out_dim=2048
+                out_dim=self.output_dim
             )
+    
+    def reinitialize_projectors_with_teacher_dim(self, teacher_hidden_size):
+        """
+        Reinitialize projectors with the correct teacher hidden dimension.
+        This must be called after we have access to the teacher model.
+        
+        Args:
+            teacher_hidden_size: Hidden dimension of the teacher model
+        """
+        if self.projectors_initialized and self.output_dim == teacher_hidden_size:
+            # Already initialized with correct dimension
+            return
+        
+        self.output_dim = teacher_hidden_size
+        self.projectors = nn.ModuleDict()
+        
+        for dim in self.nesting_list:
+            self.projectors[f'proj_{dim}'] = OrthogonalProjection(
+                in_dim=dim,
+                out_dim=teacher_hidden_size
+            )
+        
+        self.projectors_initialized = True
+        
+        # Move to current device if needed
+        if hasattr(self, '_device'):
+            self.to(self._device)
     
     def to(self, device, dtype=None):
         """Override to method to ensure projectors are moved to the correct device and dtype"""
+        self._device = device
         result = super().to(device, dtype=dtype)
         # Ensure projectors are also moved
         for proj in self.projectors.values():
@@ -344,6 +379,10 @@ class MATRY_CTKD(Matry_InfoNCELoss):
         Returns:
             Total Matryoshka CTKD loss
         """
+        # Reinitialize projectors with the correct teacher hidden dimension
+        if hasattr(distiller, 'teacher_hidden_size'):
+            self.reinitialize_projectors_with_teacher_dim(distiller.teacher_hidden_size)
+        
         # Get teacher embeddings (mean pooled)
         teacher_query = self.get_teacher_embeddings(
             distiller.teacher_model,
