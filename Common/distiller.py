@@ -25,11 +25,9 @@ class Distiller(nn.Module):
         self.device = device
         self.student_model, self.student_tokenizer = self.load_student_model()
         
-        # Load teacher model for distillation (required for matry_ctkd criterion)
         if hasattr(self.args, 'teacher_model_path') and self.args.teacher_model_path is not None:
             self.teacher_model, self.teacher_tokenizer = self.load_teacher_model()
         else:
-            # For matry_ctkd, we always need a teacher model (uses hardcoded LLM2Vec)
             self.teacher_model, self.teacher_tokenizer = self.load_teacher_model()
 
     @staticmethod
@@ -239,6 +237,18 @@ class Distiller(nn.Module):
         
         return teacher_model, tokenizer
 
+    def get_matryoshka_embeddings(self, model, input_ids, attention_mask):
+        """Get embeddings at multiple matryoshka dimensions"""
+        # Get full embedding
+        full_embedding = self.get_embeddings(model, input_ids, attention_mask)
+        
+        # Create dict with truncated embeddings
+        embeddings_dict = {}
+        for dim in self.args.mrl_nesting_list:
+            embeddings_dict[f"emb_{dim}"] = full_embedding[:, :dim]
+        
+        return embeddings_dict
+    
     def forward(self, criterion, batch, logging_output, loss_denom):
         input_data = batch["input_batch"]
         output_data = batch.get("output_batch", None)
