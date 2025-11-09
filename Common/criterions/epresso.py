@@ -20,7 +20,8 @@ class MatryoshkaContrastiveLoss(nn.Module):
     ):
         super().__init__()
         if matryoshka_weights is None:
-            matryoshka_weights = [1.0] * len(matryoshka_dims)
+            num_dims = len(matryoshka_dims)
+            matryoshka_weights = [(i + 1) / num_dims for i in range(num_dims)]
         
         # Sort dimensions and weights in descending order
         dims_weights = zip(matryoshka_dims, matryoshka_weights)
@@ -285,7 +286,7 @@ class EPRESSO(nn.Module):
         self.args = args
         
         # Matryoshka configuration
-        self.matryoshka_dims = getattr(args, 'mrl_nesting_list', [128, 256, 512, 768])
+        self.matryoshka_dims = getattr(args, 'mrl_nesting_list', [16, 32, 64, 128, 256, 512, 768])
         self.matryoshka_weights = getattr(args, 'matryoshka_weights', None)
         self.n_dims_per_step = getattr(args, 'n_dims_per_step', -1)
         self.temperature = getattr(args, 'contrastive_temperature', 0.05)
