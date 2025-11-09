@@ -1,0 +1,31 @@
+split,genre,dataset,year,sid,score,sentence1,sentence2
+train,main-captions,MSRvid,2012test,0001,5.0,A plane is taking off.,An air plane is taking off.
+train,main-captions,MSRvid,2012test,0004,3.8,A man is playing a large flute.,A man is playing a flute.
+train,main-captions,MSRvid,2012test,0005,3.8,A man is spreading shreded cheese on a pizza.,A man is spreading shredded cheese on an uncooked pizza.
+train,main-captions,MSRvid,2012test,0006,2.6,Three men are playing chess.,Two men are playing chess.
+train,main-captions,MSRvid,2012test,0009,4.25,A man is playing the cello.,A man seated is playing the cello.
+train,main-captions,MSRvid,2012test,0011,4.25,Some men are fighting.,Two men are fighting.
+train,main-captions,MSRvid,2012test,0012,0.5,A man is smoking.,A man is skating.
+train,main-captions,MSRvid,2012test,0013,1.6,The man is playing the piano.,The man is playing the guitar.
+train,main-captions,MSRvid,2012test,0014,2.2,A man is playing on a guitar and singing.,A woman is playing an acoustic guitar and singing.
+train,main-captions,MSRvid,2012test,0016,5.0,A person is throwing a cat on to the ceiling.,A person throws a cat on the ceiling.
+train,main-captions,MSRvid,2012test,0017,4.2,The man hit the other man with a stick.,The man spanked the other man with a stick.
+train,main-captions,MSRvid,2012test,0018,4.6,A woman picks up and holds a baby kangaroo.,A woman picks up and holds a baby kangaroo in her arms.
+train,main-captions,MSRvid,2012test,0019,3.867,A man is playing a flute.,A man is playing a bamboo flute.
+train,main-captions,MSRvid,2012test,0020,4.667,A person is folding a piece of paper.,Someone is folding a piece of paper.
+train,main-captions,MSRvid,2012test,0021,1.667,A man is running on the road.,A panda dog is running on the road.
+train,main-captions,MSRvid,2012test,0022,3.75,A dog is trying to get bacon off his back.,A dog is trying to eat the bacon on its back.
+train,main-captions,MSRvid,2012test,0025,5.0,The polar bear is sliding on the snow.,A polar bear is sliding across the snow.
+train,main-captions,MSRvid,2012test,0026,0.5,A woman is writing.,A woman is swimming.
+train,main-captions,MSRvid,2012test,0028,3.8,A cat is rubbing against baby's face.,A cat is rubbing against a baby.
+train,main-captions,MSRvid,2012test,0029,5.0,The man is riding a horse.,A man is riding on a horse.
+train,main-captions,MSRvid,2012test,0030,3.2,A man pours oil into a pot.,A man pours wine in a pot.
+train,main-captions,MSRvid,2012test,0031,2.8,A man is playing a guitar.,A girl is playing a guitar.
+train,main-captions,MSRvid,2012test,0032,4.6,A panda is sliding down a slide.,A panda slides down a slide.
+train,main-captions,MSRvid,2012test,0034,3.0,A woman is eating something.,A woman is eating meat.
+train,main-captions,MSRvid,2012test,0035,5.0,A woman peels a potato.,A woman is peeling a potato.
+train,main-captions,MSRvid,2012test,0038,4.8,The boy fell off his bike.,A boy falls off his bike.
+train,main-captions,MSRvid,2012test,0040,5.0,The woman is playing the flute.,A woman is playing a flute.
+train,main-captions,MSRvid,2012test,0042,4.2,A rabbit is running from an eagle.,A hare is running from a eagle.
+train,main-captions,MSRvid,2012test,0044,4.2,The woman is frying a breaded pork chop.,A woman is cooking a breaded pork chop.
+train,main-captions,MSRvid,2012test,0046,4.0,A girl is flying a kite.,A girl running is flying a kite.

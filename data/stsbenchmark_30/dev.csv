@@ -1,0 +1,31 @@
+split,genre,dataset,year,sid,score,sentence1,sentence2
+dev,main-captions,MSRvid,2012test,0000,5.0,A man with a hard hat is dancing.,A man wearing a hard hat is dancing.
+dev,main-captions,MSRvid,2012test,0002,4.75,A young child is riding a horse.,A child is riding a horse.
+dev,main-captions,MSRvid,2012test,0003,5.0,A man is feeding a mouse to a snake.,The man is feeding a mouse to the snake.
+dev,main-captions,MSRvid,2012test,0007,2.4,A woman is playing the guitar.,A man is playing guitar.
+dev,main-captions,MSRvid,2012test,0008,2.75,A woman is playing the flute.,A man is playing a flute.
+dev,main-captions,MSRvid,2012test,0010,2.615,A woman is cutting an onion.,A man is cutting onions.
+dev,main-captions,MSRvid,2012test,0015,5.0,A man is erasing a chalk board.,The man is erasing the chalk board.
+dev,main-captions,MSRvid,2012test,0023,2.333,A woman is carrying a boy.,A woman is carrying her baby.
+dev,main-captions,MSRvid,2012test,0027,3.75,Three men are playing guitars.,Three men are on stage playing guitars.
+dev,main-captions,MSRvid,2012test,0036,5.0,A woman peels a potato.,A woman is peeling a potato.
+dev,main-captions,MSRvid,2012test,0037,3.2,People are playing cricket.,Men are playing cricket.
+dev,main-captions,MSRvid,2012test,0039,1.583,A man is playing a guitar.,A man is playing a flute.
+dev,main-captions,MSRvid,2012test,0041,5.0,The cougar is chasing the bear.,A cougar is chasing a bear.
+dev,main-captions,MSRvid,2012test,0043,5.0,The man cut down a tree with an axe.,A man chops down a tree with an axe.
+dev,main-captions,MSRvid,2012test,0049,4.909,The man is playing the guitar.,A man is playing a guitar.
+dev,main-captions,MSRvid,2012test,0051,0.8,A man is finding something.,A woman is slicing something.
+dev,main-captions,MSRvid,2012test,0060,2.4,The girl sang into a microphone.,The lady sang into the microphone.
+dev,main-captions,MSRvid,2012test,0067,5.0,A man is climbing a rope.,A man climbs a rope.
+dev,main-captions,MSRvid,2012test,0079,4.0,Kittens are eating food.,Kittens are eating from dishes.
+dev,main-captions,MSRvid,2012test,0088,0.636,A man is speaking.,A man is spitting.
+dev,main-captions,MSRvid,2012test,0091,3.0,A woman is cooking eggs.,A woman is cooking something.
+dev,main-captions,MSRvid,2012test,0097,1.714,A man is playing a guitar.,A man is playing a trumpet.
+dev,main-captions,MSRvid,2012test,0098,3.2,An animal is chewing on something.,An animal is chewing on a key chain.
+dev,main-captions,MSRvid,2012test,0122,2.167,A man is playing a flute.,A man is playing guitar.
+dev,main-captions,MSRvid,2012test,0140,1.0,A man is playing soccer.,A man is playing flute.
+dev,main-captions,MSRvid,2012test,0147,1.917,A girl is riding a horse.,A girl is riding a bicycle.
+dev,main-captions,MSRvid,2012test,0153,4.25,A man is lifting weights in a garage.,A man is lifting weights.
+dev,main-captions,MSRvid,2012test,0159,3.0,An animal is biting a persons finger.,A slow loris is biting a persons finger.
+dev,main-captions,MSRvid,2012test,0173,1.0,A woman is reading.,A woman is kneading dough.
+dev,main-captions,MSRvid,2012test,0177,0.6,A man is crying.,A woman is dancing.

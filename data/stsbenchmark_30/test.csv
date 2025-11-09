@@ -1,0 +1,31 @@
+split,genre,dataset,year,sid,score,sentence1,sentence2
+test,main-captions,MSRvid,2012test,0024,2.5,A girl is styling her hair.,A girl is brushing her hair.
+test,main-captions,MSRvid,2012test,0033,3.6,A group of men play soccer on the beach.,A group of boys are playing soccer on the beach.
+test,main-captions,MSRvid,2012test,0045,5.0,One woman is measuring another woman's ankle.,A woman measures another woman's ankle.
+test,main-captions,MSRvid,2012test,0063,4.2,A man is cutting up a cucumber.,A man is slicing a cucumber.
+test,main-captions,MSRvid,2012test,0066,1.5,A man is playing a harp.,A man is playing a keyboard.
+test,main-captions,MSRvid,2012test,0074,1.8,A woman is cutting onions.,A woman is cutting tofu.
+test,main-captions,MSRvid,2012test,0076,3.5,A man is riding an electric bicycle.,A man is riding a bicycle.
+test,main-captions,MSRvid,2012test,0082,2.2,A man is playing the drums.,A man is playing the guitar.
+test,main-captions,MSRvid,2012test,0092,2.2,A man is playing guitar.,A lady is playing the guitar.
+test,main-captions,MSRvid,2012test,0095,1.714,A man is playing a guitar.,A man is playing a trumpet.
+test,main-captions,MSRvid,2012test,0096,1.714,A man is playing a guitar.,A man is playing a trumpet.
+test,main-captions,MSRvid,2012test,0100,5.0,A man is cutting an onion.,A man cuts an onion.
+test,main-captions,MSRvid,2012test,0103,0.6,A man is cycling.,A man is talking.
+test,main-captions,MSRvid,2012test,0107,4.4,A man is slicing open a fish.,A man is cutting up a fish.
+test,main-captions,MSRvid,2012test,0124,2.0,A man is slicing a tomato.,A man is slicing a bun.
+test,main-captions,MSRvid,2012test,0127,1.8,A man is playing a guitar.,A man is playing a keyboard.
+test,main-captions,MSRvid,2012test,0128,4.4,A baby panda goes down a slide.,A panda slides down a slide.
+test,main-captions,MSRvid,2012test,0134,3.6,A man is singing and playing a guitar.,A man is playing a guitar.
+test,main-captions,MSRvid,2012test,0137,3.6,A man attacks a woman.,A man slaps a woman.
+test,main-captions,MSRvid,2012test,0139,1.2,A man is driving a car.,A man is riding a horse.
+test,main-captions,MSRvid,2012test,0146,2.4,A woman is cutting tofu.,A woman is cutting an onion.
+test,main-captions,MSRvid,2012test,0150,0.2,The woman is styling her hair.,The woman is slicing herbs.
+test,main-captions,MSRvid,2012test,0156,4.2,Two zebras play in an open field.,Two zebras are playing in a field.
+test,main-captions,MSRvid,2012test,0162,4.4,A man is cutting a potato.,A man is slicing some potato.
+test,main-captions,MSRvid,2012test,0169,2.25,A man is slicing an onion.,A woman is slicing a pumpkin.
+test,main-captions,MSRvid,2012test,0170,2.0,A  man is dancing.,A man and woman is dancing.
+test,main-captions,MSRvid,2012test,0171,0.75,A man is riding a motorcycle.,A woman is riding a horse.
+test,main-captions,MSRvid,2012test,0174,2.2,A woman is slicing garlics.,A woman is slicing an onion.
+test,main-captions,MSRvid,2012test,0181,0.8,A man is speaking.,A man is cooking.
+test,main-captions,MSRvid,2012test,0183,2.2,A little boy is singing and playing a guitar.,A man is singing and playing the guitar.
