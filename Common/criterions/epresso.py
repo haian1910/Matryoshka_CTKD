@@ -329,38 +329,18 @@ class EPRESSO(nn.Module):
         """
         self.distiller = distiller
         
-        if self.use_adaptive_layers:
-            # Use adaptive layer loss (2D Matryoshka: dimensions + layers)
-            loss, query_embeddings_dict, pos_embeddings_dict, correct_dict = self.adaptive_layer_loss(
-                distiller=distiller,
-                query_input_ids=input_data["query_input_ids"],
-                query_attention_mask=input_data["query_attention_mask"],
-                positive_input_ids=input_data["positive_input_ids"],
-                positive_attention_mask=input_data["positive_attention_mask"],
-                base_loss_fn=self.matryoshka_loss,
-                matryoshka_dims=self.matryoshka_dims
-            )
-        else:
-            # Standard forward pass with Matryoshka loss only (1D Matryoshka: dimensions)
-            # Get embeddings at multiple dimensions
-            query_embeddings_dict = distiller.get_matryoshka_embeddings(
-                distiller.student_model,
-                input_data["query_input_ids"],
-                input_data["query_attention_mask"]
-            )
-            
-            pos_embeddings_dict = distiller.get_matryoshka_embeddings(
-                distiller.student_model,
-                input_data["positive_input_ids"],
-                input_data["positive_attention_mask"]
-            )
-            
-            # Apply Matryoshka contrastive loss
-            loss, correct_dict = self.matryoshka_loss(
-                query_embeddings_dict, 
-                pos_embeddings_dict,
-                use_distributed=True
-            )
+        
+        # Use adaptive layer loss (2D Matryoshka: dimensions + layers)
+        loss, query_embeddings_dict, pos_embeddings_dict, correct_dict = self.adaptive_layer_loss(
+            distiller=distiller,
+            query_input_ids=input_data["query_input_ids"],
+            query_attention_mask=input_data["query_attention_mask"],
+            positive_input_ids=input_data["positive_input_ids"],
+            positive_attention_mask=input_data["positive_attention_mask"],
+            base_loss_fn=self.matryoshka_loss,
+            matryoshka_dims=self.matryoshka_dims
+        )
+        
         
         # Get the largest dimension for primary metrics
         max_dim = max(self.matryoshka_dims)
