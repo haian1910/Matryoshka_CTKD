@@ -1078,5 +1078,39 @@ def main():
     else:
         print("Skipping CLF fine-tuning (clf_data_dir not specified or missing train/dev data)")
     
+    # ========== CLF Evaluation ==========
+    print("\n[3/3] Preparing CLF evaluation datasets...")
+    clf_eval_data = prepare_clf_dataset(args, distiller)
+    
+    if "dev" in clf_eval_data:
+        print("\n" + "="*60)
+        print("Evaluating on CLF dev set with MRL dimensions")
+        print("="*60)
+        clf_dev_results = evaluate_clf(
+            args, 
+            distiller.student_tokenizer, 
+            model_engine.module.student_model, 
+            clf_eval_data["dev"], 
+            "dev", 
+            device
+        )
+    
+    if "test" in clf_eval_data:
+        print("\n" + "="*60)
+        print("Evaluating on CLF test set with MRL dimensions")
+        print("="*60)
+        clf_test_results = evaluate_clf(
+            args, 
+            distiller.student_tokenizer, 
+            model_engine.module.student_model, 
+            clf_eval_data["test"], 
+            "test", 
+            device
+        )
+    
+    print("\n" + "="*80)
+    print(" EVALUATION COMPLETE ".center(80, "="))
+    print("="*80)
+    
 if __name__ == "__main__":
     main()
