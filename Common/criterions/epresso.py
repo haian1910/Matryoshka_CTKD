@@ -307,14 +307,14 @@ class EPRESSO(nn.Module):
             temperature=self.temperature
         )
         
-        if self.use_adaptive_layers:
-            self.adaptive_layer_loss = AdaptiveLayerContrastiveLoss(
-                n_layers_per_step=self.n_layers_per_step,
-                last_layer_weight=self.last_layer_weight,
-                prior_layers_weight=self.prior_layers_weight,
-                kl_div_weight=self.kl_div_weight,
-                kl_temperature=self.kl_temperature
-            )
+       
+        self.adaptive_layer_loss = AdaptiveLayerContrastiveLoss(
+            n_layers_per_step=self.n_layers_per_step,
+            last_layer_weight=self.last_layer_weight,
+            prior_layers_weight=self.prior_layers_weight,
+            kl_div_weight=self.kl_div_weight,
+            kl_temperature=self.kl_temperature
+        )
     
     def forward(self, distiller, input_data, output_data, logging_output, batch_denom):
         """
