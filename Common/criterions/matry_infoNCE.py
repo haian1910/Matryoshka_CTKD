@@ -229,7 +229,11 @@ class Matry_InfoNCELoss(InfoNCELoss):
     def gather_tensors(self, tensor):
         """
         Gather tensors from all GPUs for distributed training.
+        Ensures tensor is contiguous before gathering.
         """
+        # CRITICAL FIX: Ensure tensor is contiguous before all_gather
+        tensor = tensor.contiguous()
+        
         world_size = dist.get_world_size()
         gathered_tensors = [torch.zeros_like(tensor) for _ in range(world_size)]
         dist.all_gather(gathered_tensors, tensor)
