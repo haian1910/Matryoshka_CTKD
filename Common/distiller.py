@@ -17,6 +17,7 @@ from utils import log_rank
 from huggingface_hub import login
 import torch.distributed as dist
 import os
+# login(token="token")
 
 class Distiller(nn.Module):
     def __init__(self, args, device):
@@ -108,30 +109,14 @@ class Distiller(nn.Module):
                     model,
                     "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
                 )
-                model = model.merge_and_unload()
+                model = model.merge_and_unload()  # This can take several minutes on cpu
 
                 model = PeftModel.from_pretrained(
-                    model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-unsup-simcse"
+                    model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised"
                 )
                 model = model.merge_and_unload() 
                 
-                # Apply new LoRA adapter for fine-tuning
-                if self.args.do_train:
-                    peft_config = LoraConfig(
-                        task_type=TaskType.FEATURE_EXTRACTION,  # Changed from SEQ_CLS
-                        inference_mode=(not self.args.do_train),
-                        r=self.args.peft_lora_r,
-                        lora_alpha=self.args.peft_lora_alpha,
-                        lora_dropout=self.args.peft_lora_dropout,
-                        target_modules=[
-                            "q_proj", "k_proj", "v_proj", "o_proj", 
-                            "gate_proj", "up_proj", "down_proj"
-                        ]
-                    )
-                    model = get_peft_model(model, peft_config)
-                    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-                    all_params = sum(p.numel() for p in model.parameters())
-                    log_rank(f"Trainable parameters: {trainable_params}/{all_params} ({trainable_params/all_params:.2%})")
+
             else:
                 raise NotImplementedError
         else:  # for BERT
@@ -163,77 +148,79 @@ class Distiller(nn.Module):
         return model, tokenizer
     
     def load_teacher_model(self):
-        log_rank("Loading teacher model...")
+        # log_rank("Loading teacher model...")
+        # config = AutoConfig.from_pretrained(
+        #     "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
+        #     trust_remote_code=True
+        # )
+        # config.is_model_parallel = False
+
+        # tokenizer = self.load_tokenizer("McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp")
+
+        # if hasattr(config, "n_embed"):
+        #     self.teacher_hidden_size = config.n_embed
+        # else:
+        #     self.teacher_hidden_size = config.hidden_size
+
+        # # Load as AutoModel (backbone only)
+        # model = AutoModel.from_pretrained(
+        #     "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
+        #     config=config,
+        #     device_map=None,
+        #     torch_dtype=self.dtype,
+        #     trust_remote_code=True,
+        # )
+        # model.config.pad_token_id = 2
+        
+        # teacher_model = PeftModel.from_pretrained(
+        #     model,
+        #     "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
+        # )    
+        
+        # teacher_model = teacher_model.merge_and_unload()
+
+        # teacher_model = PeftModel.from_pretrained(
+        #     teacher_model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised"
+        # )
+        # teacher_model = teacher_model.merge_and_unload()
+
+        # teacher_model.eval()
+        # for param in teacher_model.parameters():
+        #     param.requires_grad = False
+
+        log_rank("Loading teacher model")
         config = AutoConfig.from_pretrained(
-            "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
+            "Qwen/Qwen3-Embedding-0.6B",
             trust_remote_code=True
         )
         config.is_model_parallel = False
 
-        tokenizer = self.load_tokenizer("McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp")
+        tokenizer = self.load_tokenizer("Qwen/Qwen3-Embedding-0.6B")
 
         if hasattr(config, "n_embed"):
             self.teacher_hidden_size = config.n_embed
         else:
             self.teacher_hidden_size = config.hidden_size
 
-        # Load as AutoModel (backbone only)
-        model = AutoModel.from_pretrained(
-            "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
+     
+        teacher_model = AutoModel.from_pretrained(
+            "Qwen/Qwen3-Embedding-0.6B",
             config=config,
             device_map=None,
             torch_dtype=self.dtype,
             trust_remote_code=True,
         )
-        model.config.pad_token_id = 2
         
-        teacher_model = PeftModel.from_pretrained(
-            model,
-            "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp",
-        )    
+        # Set pad token ID if needed
+        if teacher_model.config.pad_token_id is None:
+            teacher_model.config.pad_token_id = tokenizer.pad_token_id
         
-        teacher_model = teacher_model.merge_and_unload()
-
-        teacher_model = PeftModel.from_pretrained(
-            teacher_model, "McGill-NLP/LLM2Vec-Mistral-7B-Instruct-v2-mntp-supervised"
-        )
-        teacher_model = teacher_model.merge_and_unload()
-
-        # if hasattr(self.args, 'teacher_model_path') and self.args.teacher_model_path:
-        #     adapter_path = os.path.join(self.args.teacher_model_path, "adapter_model.bin")
-        #     fixed_adapter_path = adapter_path + ".fixed"
-            
-        #     if not os.path.exists(fixed_adapter_path):
-        #         if dist.get_rank() == 0:
-        #             checkpoint = torch.load(adapter_path)            
-        #             fixed_checkpoint = {}
-                    
-        #             for key, value in checkpoint.items():
-        #                 if "lora_A.weight" in key and "default" not in key:
-        #                     key = key.replace("lora_A.weight", "lora_A.default.weight")
-        #                 if "lora_B.weight" in key and "default" not in key:
-        #                     key = key.replace("lora_B.weight", "lora_B.default.weight")
-        #                 if "base_model.model.base_model.model" in key:
-        #                     key = key.replace("base_model.model.base_model.model", "base_model.model")
-                            
-        #                 fixed_checkpoint[key] = value
-                    
-        #             if fixed_checkpoint: 
-        #                 torch.save(fixed_checkpoint, fixed_adapter_path)
-            
-        #     dist.barrier()  
-            
-        #     teacher_model = PeftModel.from_pretrained(
-        #         teacher_model,
-        #         self.args.teacher_model_path,
-        #         adapter_name="default",
-        #         adapter_weights_path=fixed_adapter_path
-        #     )
-
-        # Set teacher model to eval mode and freeze parameters
         teacher_model.eval()
+        
+        # Make all parameters trainable for full fine-tuning
         for param in teacher_model.parameters():
             param.requires_grad = False
+        
         
         return teacher_model, tokenizer
 
@@ -244,7 +231,7 @@ class Distiller(nn.Module):
         
         # Create dict with truncated embeddings
         embeddings_dict = {}
-        for dim in [64, 128, 256, 512, 768]:
+        for dim in [16, 32, 64, 128, 256, 512, 768]:
             embeddings_dict[f"emb_{dim}"] = full_embedding[:, :dim]
         
         return embeddings_dict
