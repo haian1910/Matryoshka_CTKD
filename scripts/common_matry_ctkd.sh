@@ -22,7 +22,7 @@ TEACHER_MODEL_NAME="LLM2Vec"
 # TEACHER_MODEL_PATH="/content/Matryoshka_CTKD/outputs/LLM2Vec/sft/criterion=info_nce__lora-rank=2-alpha=1-dropout=0.1-bf16__epoch=1__bsz=1x1x1=1__lr=0.00001/final_model"
 # data
 DATA_DIR="/workspace/Matryoshka_CTKD/common_data_test"
-NUM_LABELS=9
+NUM_LABELS=4,9
 # task
 TASK="matry_cka"
 # hp

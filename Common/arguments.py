@@ -38,8 +38,8 @@ def add_model_args(parser: argparse.ArgumentParser):
     group.add_argument("--dropout-path-rate", type=float, default=None)
     group.add_argument("--fp32", action="store_true")
     group.add_argument("--model-dtype", type=str, default="fp16")
-    # Add num_labels for classification tasks
-    group.add_argument("--num-labels", type=int, default=2, help="Number of labels for classification tasks")
+    # Add num_labels for classification tasks - can be int or comma-separated list for multiple datasets
+    group.add_argument("--num-labels", type=str, default="2", help="Number of labels for classification tasks. Can be single int (e.g., '2') or comma-separated list (e.g., '2,3,4') for multiple datasets")
     return parser
 
 
