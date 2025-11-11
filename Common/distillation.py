@@ -33,6 +33,52 @@ from sklearn.metrics import precision_score, recall_score, accuracy_score
 
 torch.set_num_threads(4)
 
+def parse_num_labels(num_labels_arg):
+    """
+    Parse num_labels argument which can be:
+    - A single integer (e.g., '2' or 2)
+    - A comma-separated list (e.g., '2,3,4')
+    
+    Returns a dict mapping index to num_labels, or a single int if only one value.
+    """
+    if isinstance(num_labels_arg, int):
+        return num_labels_arg
+    
+    if isinstance(num_labels_arg, str):
+        if ',' in num_labels_arg:
+            # Multiple values for multiple datasets
+            values = [int(x.strip()) for x in num_labels_arg.split(',')]
+            return values
+        else:
+            # Single value
+            return int(num_labels_arg)
+    
+    return num_labels_arg
+
+def get_num_labels_for_dataset(num_labels_arg, dataset_index=0, num_datasets=1):
+    """
+    Get the num_labels value for a specific dataset.
+    
+    Args:
+        num_labels_arg: Can be int or list of ints
+        dataset_index: Index of the current dataset
+        num_datasets: Total number of datasets
+    
+    Returns:
+        int: Number of labels for this dataset
+    """
+    parsed = parse_num_labels(num_labels_arg)
+    
+    if isinstance(parsed, list):
+        if dataset_index < len(parsed):
+            return parsed[dataset_index]
+        else:
+            # If not enough values provided, use the last one
+            return parsed[-1]
+    else:
+        # Single value, use for all datasets
+        return parsed
+
 def truncate_embeddings(embeddings, dim):
     """Truncate embeddings to specified dimension for MRL evaluation."""
     if dim >= embeddings.size(-1):
@@ -165,22 +211,33 @@ def evaluate_sts(args, tokenizer, student_model, dataset, split, device):
     return results
 
 def prepare_clf_datasets_list(args, distiller):
-    """Prepare CLF datasets from a list of directories"""
+    """Prepare CLF datasets from a list of directories and map num_labels for each"""
     clf_datasets = {}
+    clf_num_labels_map = {}  # Map dataset_name -> num_labels
+    
     clf_data_dirs = getattr(args, 'clf_data_dirs', [])
     if not clf_data_dirs:
-        return clf_datasets
+        return clf_datasets, clf_num_labels_map
     
     if isinstance(clf_data_dirs, str):
         clf_data_dirs = [clf_data_dirs]
     
+    num_labels_arg = getattr(args, 'num_labels', '2')
+    parsed_num_labels = parse_num_labels(num_labels_arg)
+    
     original_data_dir = args.data_dir
-    for clf_data_dir in clf_data_dirs:
+    for dataset_idx, clf_data_dir in enumerate(clf_data_dirs):
         if not os.path.exists(clf_data_dir):
             continue
         
         dataset_name = os.path.basename(clf_data_dir.rstrip('/'))
         args.data_dir = clf_data_dir
+        
+        # Get num_labels for this dataset
+        dataset_num_labels = get_num_labels_for_dataset(parsed_num_labels, dataset_idx, len(clf_data_dirs))
+        clf_num_labels_map[dataset_name] = dataset_num_labels
+        
+        print(f"Dataset '{dataset_name}' will use num_labels={dataset_num_labels}")
         
         try:
             dataset_dict = {}
@@ -201,7 +258,7 @@ def prepare_clf_datasets_list(args, distiller):
             continue
     
     args.data_dir = original_data_dir
-    return clf_datasets
+    return clf_datasets, clf_num_labels_map
 
 @torch.no_grad()
 def extract_embeddings_efficient(model, dataloader, dataset, device):
@@ -298,7 +355,7 @@ def train_clf_head_batch_efficient(clf_head, train_emb_full, train_labels, dim, 
         avg_acc = total_correct / total_samples
         print(f"    Epoch {epoch+1}/{clf_epochs} - Loss: {avg_loss:.4f}, Acc: {avg_acc:.4f}")
 
-def finetune_clf_per_dimension(args, tokenizer, student_model, dataset, device):
+def finetune_clf_per_dimension(args, tokenizer, student_model, dataset, device, num_labels=None):
     """
     Per-dimension classification fine-tuning for large datasets.
     
@@ -308,6 +365,14 @@ def finetune_clf_per_dimension(args, tokenizer, student_model, dataset, device):
          - Truncate embeddings
          - Train linear head
          - Evaluate on test/dev set (prefer test, fallback to dev)
+    
+    Args:
+        args: Arguments object
+        tokenizer: Tokenizer
+        student_model: Model to fine-tune
+        dataset: Dataset dictionary with "train" and "dev" keys
+        device: Device to use
+        num_labels: Number of labels for this classification task. If None, will be read from args.num_labels
     """
     print("\n" + "="*50)
     print("Start Per-Dimension Classification Fine-tuning")
@@ -318,9 +383,13 @@ def finetune_clf_per_dimension(args, tokenizer, student_model, dataset, device):
         return {}
     
     matryoshka_dims = getattr(args, 'matryoshka_dims', [16, 32, 64, 128, 256, 512, 768])
-    num_labels = getattr(args, 'num_labels', 2)
-    clf_epochs = getattr(args, 'clf_epochs', 3)
-    eval_batch_size = getattr(args, 'eval_batch_size', 256)
+    
+    # Use provided num_labels or fallback to args.num_labels
+    if num_labels is None:
+        num_labels_arg = getattr(args, 'num_labels', '2')
+        num_labels = get_num_labels_for_dataset(num_labels_arg, 0, 1)
+    clf_epochs = getattr(args, 'clf_epochs', 100)
+    eval_batch_size = getattr(args, 'eval_batch_size', 4)
     
     all_dim_results = {}
     
@@ -669,18 +738,20 @@ def main():
                 dev_results = evaluate_sts(args, distiller.student_tokenizer, 
                                           model_engine.module.student_model, sts_eval_data["dev"], f"{dataset_name}_dev", device)
                 all_sts_results[f"{dataset_name}_dev"] = dev_results
+                print(dev_results)
             
             if "test" in sts_eval_data:
                 test_results = evaluate_sts(args, distiller.student_tokenizer, 
                                            model_engine.module.student_model, sts_eval_data["test"], f"{dataset_name}_test", device)
                 all_sts_results[f"{dataset_name}_test"] = test_results
+                print(test_results)
     
     # CLF Fine-tuning
     print("\n" + "="*80)
     print("[2/3] CLF FINE-TUNING ON MULTIPLE DATASETS (PER MRL DIMENSION)".center(80, "="))
     print("="*80)
     
-    clf_finetune_datasets = prepare_clf_datasets_list(args, distiller)
+    clf_finetune_datasets, clf_num_labels_map = prepare_clf_datasets_list(args, distiller)
     all_clf_finetune_results = {}
     
     for dataset_name, clf_data in clf_finetune_datasets.items():
@@ -692,8 +763,9 @@ def main():
             print(f"Warning: {dataset_name} missing train or dev data")
             continue
         
+        dataset_num_labels = clf_num_labels_map.get(dataset_name, 2)
         dim_results = finetune_clf_per_dimension(args, distiller.student_tokenizer, 
-                                               model_engine.module.student_model, clf_data, device)
+                                               model_engine.module.student_model, clf_data, device, dataset_num_labels)
         all_clf_finetune_results[dataset_name] = dim_results
         print(f"\nClassification fine-tuning complete for {dataset_name}!")
     
