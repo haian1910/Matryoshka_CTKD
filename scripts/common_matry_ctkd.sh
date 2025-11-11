@@ -1,5 +1,5 @@
 #! /bin/bash
-GPUS=(0)
+GPUS=(0 1)
 export CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${GPUS[*]}")
 
 MASTER_ADDR=localhost
@@ -16,21 +16,21 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE \
 
 # model
 BASE_PATH=/workspace/Matryoshka_CTKD
-CKPT_NAME="bert"
+CKPT_NAME="EMMA"
 CKPT_PATH="${BASE_PATH}/model_hub/${CKPT_NAME}"
 TEACHER_MODEL_NAME="LLM2Vec"
 # TEACHER_MODEL_PATH="/content/Matryoshka_CTKD/outputs/LLM2Vec/sft/criterion=info_nce__lora-rank=2-alpha=1-dropout=0.1-bf16__epoch=1__bsz=1x1x1=1__lr=0.00001/final_model"
 # data
-DATA_DIR="/workspace/Matryoshka_CTKD/common_data_test"
-NUM_LABELS=9
+DATA_DIR="/workspace/Matryoshka_CTKD/common_data"
+NUM_LABELS=2,9,77
 # task
-TASK="matry_cka"
+TASK="cafe"
 # hp
-BATCH_SIZE=4
+BATCH_SIZE=8
 LR=0.00001
 GRAD_ACC=1
 EVAL_BATCH_SIZE=4
-EPOCH=1
+EPOCH=5
 KD_RATE=0.5
 KD_TEMP=2.0
 # length
@@ -62,9 +62,9 @@ OPTS+=" --teacher-model-fp16"
 OPTS+=" --gradient-checkpointing"
 # data
 # Multi-dataset fine-tuning and evaluation for STS and CLF tasks
-OPTS+=" --sts-data-dirs /workspace/Matryoshka_CTKD/common_data_test:/workspace/Matryoshka_CTKD/data/stsbenchmark_30"
-OPTS+=" --clf-data-dirs /workspace/Matryoshka_CTKD/data/ag_news_30:/workspace/Matryoshka_CTKD/data/patent_30"
-OPTS+=" --nli-data-dir /workspace/Matryoshka_CTKD/data/scitail_30"
+OPTS+=" --sts-data-dirs /workspace/Matryoshka_CTKD/data/STS12:/workspace/Matryoshka_CTKD/data/stsbenchmark:/workspace/Matryoshka_CTKD/data/SICK"
+OPTS+=" --clf-data-dirs /workspace/Matryoshka_CTKD/data/imdb:/workspace/Matryoshka_CTKD/data/patent:/workspace/Matryoshka_CTKD/data/banking77"
+#OPTS+=" --nli-data-dir /workspace/Matryoshka_CTKD/data/scitail_30"
 OPTS+=" --data-dir ${DATA_DIR}"
 OPTS+=" --num-workers 0"
 OPTS+=" --dev-num 1000"
