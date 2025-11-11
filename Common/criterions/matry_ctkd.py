@@ -67,7 +67,7 @@ class MatryoshkaHiddenStateProcessor:
     def __init__(self, matryoshka_dims: List[int], matryoshka_weights: Optional[List[float]] = None, 
                  n_dims_per_step: int = -1):
         self.matryoshka_dims = sorted(matryoshka_dims, reverse=True)  # Sort descending
-        self.matryoshka_weights = matryoshka_weights or [1.0] * len(matryoshka_dims)
+        self.matryoshka_weights = matryoshka_weights 
         self.n_dims_per_step = n_dims_per_step
         
         # Ensure weights match dimensions
@@ -153,7 +153,7 @@ class MATRY_CTKD(Matry_InfoNCELoss):
     def __init__(self, args) -> None:
         super().__init__(args)
         self.kd_rate = args.kd_rate  # Knowledge distillation rate
-        self.nesting_list = getattr(args, 'mrl_nesting_list', [64, 128, 256, 512, 768])
+        self.nesting_list = getattr(args, 'mrl_nesting_list', [16, 32, 64, 128, 256, 512, 768])
         self.mrl_efficient = getattr(args, 'mrl_efficient', False)
         
         # Student layers to process for CKA loss
@@ -161,8 +161,8 @@ class MATRY_CTKD(Matry_InfoNCELoss):
         
         # Matryoshka dimensions for hidden state processing
         # These should be smaller than the student model's hidden dimension
-        self.matryoshka_hidden_dims = getattr(args, 'matryoshka_hidden_dims', [64, 128, 256, 512, 768])
-        self.matryoshka_hidden_weights = getattr(args, 'matryoshka_hidden_weights', [1.0 / (1 + math.log(idx + 1)) for idx in range(len(self.matryoshka_hidden_dims))])
+        self.matryoshka_hidden_dims = getattr(args, 'matryoshka_hidden_dims', [16, 32, 64, 128, 256, 512, 768])
+        self.matryoshka_hidden_weights = getattr(args, 'matryoshka_hidden_weights', [1.0  for idx in range(len(self.matryoshka_hidden_dims))])
         self.n_dims_per_step = getattr(args, 'n_dims_per_step', -1)
         
         # Initialize CKA loss function
@@ -176,19 +176,19 @@ class MATRY_CTKD(Matry_InfoNCELoss):
         )
         
         # Relative importance weights for different nesting dimensions 
-        self.relative_importance = getattr(args, 'mrl_relative_importance', None)
+        self.relative_importance = getattr(args, 'mrl_relative_importance', [1.0  for i in range(len(self.nesting_list))])
         if self.relative_importance is None:
             if self.mrl_efficient:
-                self.relative_importance = [1.0]
+                self.relative_importance = [1.0  for i in range(len(self.nesting_list))]
             else:
                 num_dims = len(self.nesting_list)
-                self.relative_importance = [1.0 / (1 + math.log(i + 1)) for i in range(num_dims)]
+                self.relative_importance = [1.0  for i in range(num_dims)]
 
         self.projectors = nn.ModuleDict()
         
         # Default to 2048, will be updated after distiller is initialized
         # This will be set properly when we have access to teacher_hidden_size
-        self.output_dim = 2048
+        self.output_dim = 1024
         self.projectors_initialized = False
         
         # Initialize projectors with default output_dim
