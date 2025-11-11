@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 from typing import List
 from .info_NCE import InfoNCELoss
+import math
 
 class Matryoshka_InfoNCE_Loss(nn.Module):
     def __init__(self, temperature: float = 0.05, relative_importance: List[float] = None):
@@ -42,8 +43,8 @@ class Matryoshka_InfoNCE_Loss(nn.Module):
         losses = torch.stack(losses)
         
         # Set relative_importance to 1 if not specified
-        rel_importance = torch.ones_like(losses) if self.relative_importance is None else torch.tensor(self.relative_importance, device=losses.device)
-        
+        #rel_importance = torch.ones_like(losses) if self.relative_importance is None else torch.tensor(self.relative_importance, device=losses.device)
+        rel_importance = torch.ones_like(losses)
         # Apply relative importance weights
         weighted_losses = rel_importance * losses
         total_loss = weighted_losses.sum()
@@ -62,15 +63,13 @@ class Matry_InfoNCELoss(InfoNCELoss):
         self.use_mrl = getattr(args, 'use_mrl', False)
         
         # Relative importance weights for different nesting dimensions
-        self.relative_importance = getattr(args, 'mrl_relative_importance', None)
+        self.relative_importance = getattr(args, 'mrl_relative_importance', [1.0 for idx in range(len(self.nesting_list))])
         if self.relative_importance is None:
-            # Default: give more weight to larger dimensions
             if self.mrl_efficient or not self.use_mrl:
                 self.relative_importance = [1.0]  # Only one dimension in efficient mode or no MRL
             else:
-                # Progressive weighting: smaller dimensions get less weight
                 num_dims = len(self.nesting_list)
-                self.relative_importance = [(i + 1) / num_dims for i in range(num_dims)]
+                self.relative_importance = [1.0  for i in range(num_dims)]
         
         # Initialize Matryoshka InfoNCE loss
         self.matryoshka_loss = Matryoshka_InfoNCE_Loss(
@@ -117,8 +116,6 @@ class Matry_InfoNCELoss(InfoNCELoss):
         return loss, logging_output
 
     def compute_matryoshka_infonce_loss(self, query_embeddings_dict, positive_embeddings_dict):
-        
-        # Regular mode: order by nesting dimensions
         query_list = []
         positive_list = []
         for nesting_size in self.nesting_list:
@@ -174,7 +171,8 @@ class Matry_InfoNCELoss(InfoNCELoss):
             
             # Apply relative importance weights
             losses = torch.stack(losses)
-            rel_importance = torch.ones_like(losses) if self.relative_importance is None else torch.tensor(self.relative_importance, device=losses.device)
+            #rel_importance = torch.ones_like(losses) if self.relative_importance is None else torch.tensor(self.relative_importance, device=losses.device)
+            rel_importance = torch.ones_like(losses)
             weighted_losses = rel_importance * losses
             total_loss = weighted_losses.sum()
             
