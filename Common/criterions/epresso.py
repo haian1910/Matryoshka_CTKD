@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 import random
 from typing import List, Dict, Any
+import math
 
 
 class MatryoshkaContrastiveLoss(nn.Module):
@@ -21,11 +22,10 @@ class MatryoshkaContrastiveLoss(nn.Module):
         super().__init__()
         if matryoshka_weights is None:
             num_dims = len(matryoshka_dims)
-            matryoshka_weights = [(i + 1) / num_dims for i in range(num_dims)]
+            matryoshka_weights = [1.0 / (1 + math.log(i + 1)) for i in range(num_dims)]
         
-        # Sort dimensions and weights in descending order
-        dims_weights = zip(matryoshka_dims, matryoshka_weights)
-        self.matryoshka_dims, self.matryoshka_weights = zip(*sorted(dims_weights, key=lambda x: x[0], reverse=True))
+        self.matryoshka_dims = matryoshka_dims
+        self.matryoshka_weights = matryoshka_weights
         self.n_dims_per_step = n_dims_per_step
         self.temperature = temperature
         
@@ -95,9 +95,7 @@ class MatryoshkaContrastiveLoss(nn.Module):
                 correct = (predictions == labels).float().sum()
                 correct_dict[emb_key] = correct
         
-        # Normalize by number of dimensions used
-        if len(list(dim_indices)) > 0:
-            total_loss = total_loss / len(list(dim_indices))
+  
         
         return total_loss, correct_dict
     
@@ -210,7 +208,7 @@ class AdaptiveLayerContrastiveLoss(nn.Module):
             final_pos_embeddings_dict,
             use_distributed=True
         )
-        total_loss += self.last_layer_weight * final_loss
+        total_loss +=  final_loss
         
         # Sample layers to train
         layer_indices = list(range(1, num_layers))  # Skip embedding layer and final layer
@@ -239,9 +237,8 @@ class AdaptiveLayerContrastiveLoss(nn.Module):
                 use_distributed=True
             )
             
-            # Weight by layer position (earlier layers get less weight)
-            weight_factor = (layer_idx + 1) / num_layers
-            total_loss += self.prior_layers_weight * weight_factor * layer_loss / len(layer_indices)
+            weight_factor = 1/(1 + math.log(layer_idx + 1))
+            total_loss +=  weight_factor * layer_loss 
         
         return total_loss, final_query_embeddings_dict, final_pos_embeddings_dict, final_correct_dict
     
@@ -251,21 +248,7 @@ class AdaptiveLayerContrastiveLoss(nn.Module):
         attention_mask, 
         matryoshka_dims
     ):
-        """Extract matryoshka embeddings from hidden states."""
-        # # Apply pooling
-        # if pooling_method == "cls":
-        #     pooled = hidden_state[:, 0, :]
-        # elif pooling_method == "mean":
-        #     input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_state.size()).float()
-        #     sum_embeddings = torch.sum(hidden_state * input_mask_expanded, 1)
-        #     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-        #     pooled = sum_embeddings / sum_mask
-        # elif pooling_method == "last":
-        #     sequence_lengths = attention_mask.sum(dim=1) - 1
-        #     batch_size = hidden_state.shape[0]
-        #     pooled = hidden_state[torch.arange(batch_size), sequence_lengths]
-        # else:
-        #     pooled = hidden_state[:, 0, :]
+      
         
         # apply mean pooling
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_state.size()).float()
@@ -287,15 +270,15 @@ class EPRESSO(nn.Module):
         
         # Matryoshka configuration
         self.matryoshka_dims = getattr(args, 'mrl_nesting_list', [16, 32, 64, 128, 256, 512, 768])
-        self.matryoshka_weights = getattr(args, 'matryoshka_weights', None)
+        self.matryoshka_weights = getattr(args, 'matryoshka_weights', [1.0 / (1 + math.log(i + 1)) for i in range(len(self.matryoshka_dims))])
         self.n_dims_per_step = getattr(args, 'n_dims_per_step', -1)
         self.temperature = getattr(args, 'contrastive_temperature', 0.05)
         
         # Adaptive layer configuration
-        self.use_adaptive_layers = getattr(args, 'use_adaptive_layers', False)
+        self.use_adaptive_layers = getattr(args, 'use_adaptive_layers', True)
         self.n_layers_per_step = getattr(args, 'n_layers_per_step', 1)
         self.last_layer_weight = getattr(args, 'last_layer_weight', 1.0)
-        self.prior_layers_weight = getattr(args, 'prior_layers_weight', 0.3)
+        self.prior_layers_weight = getattr(args, 'prior_layers_weight', 1)
         self.kl_div_weight = getattr(args, 'kl_div_weight', 0.0)
         self.kl_temperature = getattr(args, 'kl_temperature', 0.3)
         
@@ -307,14 +290,14 @@ class EPRESSO(nn.Module):
             temperature=self.temperature
         )
         
-        if self.use_adaptive_layers:
-            self.adaptive_layer_loss = AdaptiveLayerContrastiveLoss(
-                n_layers_per_step=self.n_layers_per_step,
-                last_layer_weight=self.last_layer_weight,
-                prior_layers_weight=self.prior_layers_weight,
-                kl_div_weight=self.kl_div_weight,
-                kl_temperature=self.kl_temperature
-            )
+    
+        self.adaptive_layer_loss = AdaptiveLayerContrastiveLoss(
+            n_layers_per_step=self.n_layers_per_step,
+            last_layer_weight=self.last_layer_weight,
+            prior_layers_weight=self.prior_layers_weight,
+            kl_div_weight=self.kl_div_weight,
+            kl_temperature=self.kl_temperature
+        )
     
     def forward(self, distiller, input_data, output_data, logging_output, batch_denom):
         """
@@ -329,38 +312,18 @@ class EPRESSO(nn.Module):
         """
         self.distiller = distiller
         
-        if self.use_adaptive_layers:
+       
             # Use adaptive layer loss (2D Matryoshka: dimensions + layers)
-            loss, query_embeddings_dict, pos_embeddings_dict, correct_dict = self.adaptive_layer_loss(
-                distiller=distiller,
-                query_input_ids=input_data["query_input_ids"],
-                query_attention_mask=input_data["query_attention_mask"],
-                positive_input_ids=input_data["positive_input_ids"],
-                positive_attention_mask=input_data["positive_attention_mask"],
-                base_loss_fn=self.matryoshka_loss,
-                matryoshka_dims=self.matryoshka_dims
-            )
-        else:
-            # Standard forward pass with Matryoshka loss only (1D Matryoshka: dimensions)
-            # Get embeddings at multiple dimensions
-            query_embeddings_dict = distiller.get_matryoshka_embeddings(
-                distiller.student_model,
-                input_data["query_input_ids"],
-                input_data["query_attention_mask"]
-            )
-            
-            pos_embeddings_dict = distiller.get_matryoshka_embeddings(
-                distiller.student_model,
-                input_data["positive_input_ids"],
-                input_data["positive_attention_mask"]
-            )
-            
-            # Apply Matryoshka contrastive loss
-            loss, correct_dict = self.matryoshka_loss(
-                query_embeddings_dict, 
-                pos_embeddings_dict,
-                use_distributed=True
-            )
+        loss, query_embeddings_dict, pos_embeddings_dict, correct_dict = self.adaptive_layer_loss(
+            distiller=distiller,
+            query_input_ids=input_data["query_input_ids"],
+            query_attention_mask=input_data["query_attention_mask"],
+            positive_input_ids=input_data["positive_input_ids"],
+            positive_attention_mask=input_data["positive_attention_mask"],
+            base_loss_fn=self.matryoshka_loss,
+            matryoshka_dims=self.matryoshka_dims
+        )
+        
         
         # Get the largest dimension for primary metrics
         max_dim = max(self.matryoshka_dims)
