@@ -15,6 +15,7 @@ from .info_NCE import InfoNCELoss
 from .matry_infoNCE import Matry_InfoNCELoss
 from .matry_ctkd import MATRY_CTKD
 from .epresso import EPRESSO
+from .cdm import CDM
 
 criterion_list = {
     "cross_entropy": CrossEntropyLoss,
@@ -34,7 +35,8 @@ criterion_list = {
     "info_nce": InfoNCELoss,
     "matry_nce": Matry_InfoNCELoss,
     "matry_ctkd": MATRY_CTKD,
-    "epresso": EPRESSO
+    "epresso": EPRESSO,
+    "cdm": CDM
 }
 
 def build_criterion(args):
